@@ -40,16 +40,27 @@ FILE STRUCTURE
 stock_predictor/
 │
 ├── main.py            — Program entry point; run this file
-├── data_fetcher.py    — Downloads and preprocesses stock data
+│                        (lets user choose Desktop or Web interface)
+│
+├── app_desktop.py     — Tkinter desktop GUI window
+├── app_web.py         — Flask web backend and news API
+│
+├── data_fetcher.py    — Downloads and preprocesses stock data (yfinance)
 ├── model.py           — Defines, trains, and saves the LSTM model
 ├── predictor.py       — Generates test-set and future predictions
 ├── visualizer.py      — Creates and saves matplotlib charts
+│
+├── templates/
+│   └── index.html     — Web interface frontend (HTML/CSS/JS)
+│
+├── static/            — Static assets folder (reserved for future use)
 │
 ├── saved_model/       — Trained model is stored here (auto-created)
 ├── assets/            — Output charts are saved here (auto-created)
 │
 ├── requirements.txt   — Python package dependencies
 └── README.txt         — This file
+
 
 
 REQUIREMENTS
