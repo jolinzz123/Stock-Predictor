@@ -1,124 +1,42 @@
-# predictor.py
-# Handles future price prediction using a trained LSTM model.
-# Rolling/recursive multi-step forecasting approach adapted from:
-# https://machinelearningmastery.com/multi-step-time-series-forecasting/
-
 import numpy as np
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
+from model import prepare_data, train_model, LOOKBACK
 
 
-def predict_on_test_set(model: tf.keras.Model,
-                        X_test: np.ndarray,
-                        scaler: MinMaxScaler) -> np.ndarray:
-    """
-    Generate predictions on the held-out test set and inverse-transform to real prices.
+def run_prediction(prices: np.ndarray, future_days: int = 7, epoch_callback=None) -> dict:
+    X, y, scaler = prepare_data(prices)
 
-    Parameters:
-        model (tf.keras.Model): Trained LSTM model.
-        X_test (np.ndarray): Test input sequences.
-        scaler (MinMaxScaler): Fitted scaler used during preprocessing.
+    # 80% train, 20% test
+    split = int(len(X) * 0.8)
+    X_train, X_test = X[:split], X[split:]
+    y_train = y[:split]
 
-    Returns:
-        np.ndarray: Predicted closing prices in original price scale.
-    """
-    scaled_predictions = model.predict(X_test, verbose=0)
-    predictions = scaler.inverse_transform(scaled_predictions)
-    return predictions.flatten()
+    model = train_model(X_train, y_train, epoch_callback=epoch_callback)
 
+    # Predictions on test portion only (true generalization)
+    test_preds = scaler.inverse_transform(
+        model.predict(X_test, verbose=0)
+    ).flatten()
 
-def predict_future(model: tf.keras.Model,
-                   df: pd.DataFrame,
-                   scaler: MinMaxScaler,
-                   future_days: int,
-                   look_back: int = 60) -> np.ndarray:
-    """
-    Recursively predict future stock prices beyond the available historical data.
+    # Index in the original price array where the test set begins
+    test_start_idx = LOOKBACK + split
 
-    Each predicted value is fed back as input for the next prediction step
-    (rolling forecast strategy).
-
-    Parameters:
-        model (tf.keras.Model): Trained LSTM model.
-        df (pd.DataFrame): Full historical closing price DataFrame.
-        scaler (MinMaxScaler): Fitted scaler used during preprocessing.
-        future_days (int): Number of future days to predict.
-        look_back (int): Number of time steps the model expects as input.
-
-    Returns:
-        np.ndarray: Array of future predicted prices (in original scale).
-    """
-    # Use the most recent `look_back` days as the seed sequence
-    last_sequence = scaler.transform(df.values)[-look_back:]
-    current_sequence = last_sequence.flatten().tolist()
-
-    future_predictions = []
-
+    # Autoregressive forecast for future_days
+    scaled_all = scaler.transform(prices.reshape(-1, 1))
+    seq = scaled_all[-LOOKBACK:].reshape(1, LOOKBACK, 1).copy()
+    future_preds = []
     for _ in range(future_days):
-        # Prepare input: shape (1, look_back, 1)
-        input_array = np.array(current_sequence[-look_back:]).reshape(1, look_back, 1)
+        pred_scaled = model.predict(seq, verbose=0)[0, 0]
+        future_preds.append(pred_scaled)
+        seq = np.roll(seq, -1, axis=1)
+        seq[0, -1, 0] = pred_scaled
 
-        # Predict next scaled value
-        next_scaled = model.predict(input_array, verbose=0)[0][0]
-
-        future_predictions.append(next_scaled)
-
-        # Append prediction to the rolling window
-        current_sequence.append(next_scaled)
-
-    # Inverse-transform back to real price scale
-    future_array = np.array(future_predictions).reshape(-1, 1)
-    future_prices = scaler.inverse_transform(future_array).flatten()
-
-    return future_prices
-
-
-def calculate_metrics(actual: np.ndarray, predicted: np.ndarray) -> dict:
-    """
-    Compute evaluation metrics comparing actual vs. predicted prices.
-
-    Parameters:
-        actual (np.ndarray): True closing prices.
-        predicted (np.ndarray): Model-predicted closing prices.
-
-    Returns:
-        dict: Dictionary containing RMSE, MAE, and MAPE metrics.
-    """
-    rmse = np.sqrt(np.mean((actual - predicted) ** 2))
-    mae  = np.mean(np.abs(actual - predicted))
-
-    # Avoid division by zero when computing MAPE
-    mask = actual != 0
-    mape = np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100
+    future_preds = scaler.inverse_transform(
+        np.array(future_preds).reshape(-1, 1)
+    ).flatten()
 
     return {
-        "RMSE": round(float(rmse), 4),
-        "MAE":  round(float(mae),  4),
-        "MAPE": round(float(mape), 2)
+        "test_preds": test_preds,
+        "test_start_idx": test_start_idx,
+        "train_end_idx": test_start_idx,  # index where training ends and test begins
+        "future_preds": future_preds,
     }
-
-
-def get_trend_signal(future_prices: np.ndarray) -> str:
-    """
-    Generate a simple trend signal based on the predicted price trajectory.
-
-    Parameters:
-        future_prices (np.ndarray): Array of predicted future prices.
-
-    Returns:
-        str: One of 'BULLISH 📈', 'BEARISH 📉', or 'SIDEWAYS ➡️'.
-    """
-    if len(future_prices) < 2:
-        return "INSUFFICIENT DATA"
-
-    first_price = future_prices[0]
-    last_price  = future_prices[-1]
-    change_pct  = ((last_price - first_price) / first_price) * 100
-
-    if change_pct > 1.5:
-        return f"BULLISH 📈  (+{change_pct:.2f}%)"
-    elif change_pct < -1.5:
-        return f"BEARISH 📉  ({change_pct:.2f}%)"
-    else:
-        return f"SIDEWAYS ➡️  ({change_pct:+.2f}%)"
