@@ -8,8 +8,6 @@ import os
 import io
 import base64
 import threading
-import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -23,6 +21,7 @@ from data_fetcher import (fetch_stock_data, preprocess_data, train_test_split_ti
                           get_market_stocks, get_stock_metadata,
                           fetch_gainers_losers, fetch_sector_heatmap,
                           get_sector_groups, get_market_summary)
+from news_fetcher import fetch_stock_news, fetch_market_news
 from model import build_model, train_model, load_saved_model, MODEL_SAVE_PATH
 from predictor import predict_on_test_set, predict_future, calculate_metrics, get_trend_signal
 from visualizer import plot_prediction_results, plot_training_loss, plot_future_only
@@ -88,55 +87,6 @@ def chart_to_base64(filepath: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-def fetch_stock_news(ticker: str, max_articles: int = 6) -> list:
-    """
-    Fetch recent news articles for a stock ticker via Google News RSS.
-    Source: https://news.google.com/rss
-
-    Parameters:
-        ticker (str): Stock ticker symbol.
-        max_articles (int): Maximum number of articles to return.
-
-    Returns:
-        list: List of dicts with keys: title, link, source, published.
-    """
-    url = (
-        f"https://news.google.com/rss/search"
-        f"?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en"
-    )
-    articles = []
-    try:
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "Mozilla/5.0"})
-        response = urllib.request.urlopen(req, timeout=6)
-        root = ET.fromstring(response.read())
-
-        for item in root.findall(".//item")[:max_articles]:
-            title   = item.findtext("title", "").strip()
-            link    = item.findtext("link",  "").strip()
-            pub_raw = item.findtext("pubDate", "")
-            source  = item.findtext("source", "Google News")
-
-            # Parse and reformat the date
-            try:
-                dt = datetime.strptime(pub_raw, "%a, %d %b %Y %H:%M:%S %Z")
-                published = dt.strftime("%d %b %Y, %H:%M")
-            except Exception:
-                published = pub_raw[:16] if pub_raw else "—"
-
-            if title and link:
-                articles.append({
-                    "title":     title,
-                    "link":      link,
-                    "source":    source,
-                    "published": published,
-                })
-    except Exception:
-        # Return empty list silently; UI handles the empty state
-        pass
-
-    return articles
-
 
 @app.route("/")
 def index():
@@ -149,11 +99,22 @@ def news(ticker: str):
     ticker = ticker.strip().upper()
     if len(ticker) > 12:
         return jsonify({"error": "Invalid ticker"}), 400
+    articles = fetch_stock_news(ticker)
+    return jsonify({"ticker": ticker, "articles": articles,
+                    "updated_at": datetime.utcnow().isoformat() + "Z"})
 
-    # Strip market suffix for news search (e.g. "600519.SS" -> "600519")
-    search_ticker = ticker.split(".")[0] if "." in ticker else ticker
-    articles = fetch_stock_news(search_ticker)
-    return jsonify({"ticker": ticker, "articles": articles})
+
+@app.route("/api/news/market")
+def api_market_news():
+    """Return aggregated general market news from multiple RSS sources."""
+    try:
+        n = int(request.args.get("n", 20))
+        n = max(1, min(n, 50))
+    except (TypeError, ValueError):
+        n = 20
+    articles = fetch_market_news(max_articles=n)
+    return jsonify({"articles": articles,
+                    "updated_at": datetime.utcnow().isoformat() + "Z"})
 
 
 @app.route("/predict", methods=["POST"])
