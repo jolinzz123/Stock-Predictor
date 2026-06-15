@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from data_fetcher import fetch_stock_data, get_stock_info
 from predictor import run_prediction
+from news_analyzer import get_news_sentiment, generate_recommendation
 
 st.set_page_config(page_title="Stock Predictor", page_icon="📈", layout="wide")
 
@@ -165,3 +166,61 @@ forecast_df = pd.DataFrame({
 st.dataframe(forecast_df, use_container_width=True, hide_index=True)
 
 st.caption("Disclaimer: This prediction is for educational purposes only and does not constitute investment advice.")
+
+# ── News-Based Trend Analysis ──────────────────────────
+st.divider()
+st.subheader("📰 News-Based Short-Term Analysis")
+
+with st.spinner("Fetching recent news and analysing sentiment..."):
+    news_result = get_news_sentiment(ticker)
+    rec = generate_recommendation(current_price, list(future_preds), news_result)
+
+# Recommendation badge
+badge_html = f"""
+<div style="
+    display:inline-block;
+    background:{rec['color']};
+    color:#111;
+    font-size:1.5rem;
+    font-weight:700;
+    padding:0.35em 1.1em;
+    border-radius:8px;
+    letter-spacing:0.05em;
+    margin-bottom:0.5rem;
+">{rec['signal']}</div>
+"""
+st.markdown(badge_html, unsafe_allow_html=True)
+
+c1, c2, c3 = st.columns(3)
+c1.metric("Combined Score", f"{rec['combined_score']:+.2f}", help="Range −1 (bearish) to +1 (bullish)")
+c2.metric("LSTM 7-Day Forecast", f"{rec['price_change_pct']:+.2f}%")
+c3.metric("News Sentiment", news_result["sentiment_label"],
+          delta=f"{news_result['aggregate_score']:+.2f}")
+
+st.markdown(rec["rationale"])
+
+# News articles table
+articles = news_result["articles"]
+if articles:
+    st.markdown("#### Recent News")
+    LABEL_ICON = {
+        "Very Positive": "🟢",
+        "Positive":      "🟢",
+        "Neutral":       "⚪",
+        "Negative":      "🔴",
+        "Very Negative": "🔴",
+    }
+    rows = []
+    for a in articles:
+        icon = LABEL_ICON.get(a["sentiment_label"], "⚪")
+        title_link = f"[{a['title']}]({a['url']})" if a["url"] else a["title"]
+        rows.append({
+            "Title": title_link,
+            "Source": a["publisher"],
+            "Published": a["published_at"],
+            "Sentiment": f"{icon} {a['sentiment_label']} ({a['sentiment_score']:+.2f})",
+        })
+    news_df = pd.DataFrame(rows)
+    st.dataframe(news_df, use_container_width=True, hide_index=True)
+else:
+    st.info("No recent news articles found for this ticker.")
