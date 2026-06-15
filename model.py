@@ -9,6 +9,7 @@ from tensorflow.keras.models import Sequential
 from sklearn.preprocessing import MinMaxScaler
 
 LOOKBACK = 36
+FUTURE_DAYS = 7
 EPOCHS = 45
 BATCH_SIZE = 16
 
@@ -138,12 +139,12 @@ def build_feature_frame(data) -> pd.DataFrame:
     return features[FEATURE_COLUMNS]
 
 
-def make_supervised_data(feature_frame: pd.DataFrame, lookback: int = LOOKBACK):
+def make_supervised_data(feature_frame: pd.DataFrame, lookback: int = LOOKBACK, future_days: int = FUTURE_DAYS):
     features = feature_frame[FEATURE_COLUMNS].astype(float)
     target = feature_frame["Close"].astype(float).to_numpy()
 
     X_seq, X_flat, y = [], [], []
-    for i in range(lookback, len(features)):
+    for i in range(lookback, len(features) - future_days + 1):
         window = features.iloc[i - lookback:i]
         X_seq.append(window.to_numpy())
 
@@ -153,7 +154,7 @@ def make_supervised_data(feature_frame: pd.DataFrame, lookback: int = LOOKBACK):
         short_std = window.tail(5).std(ddof=0).to_numpy()
         raw_close_window = window["Close"].tail(10).to_numpy()
         X_flat.append(np.concatenate([latest, short_mean, medium_mean, short_std, raw_close_window]))
-        y.append(target[i])
+        y.append(target[i:i + future_days])
 
     return np.asarray(X_seq), np.asarray(X_flat), np.asarray(y)
 
@@ -177,7 +178,7 @@ def train_linear_model(X_flat: np.ndarray, y: np.ndarray):
 
 
 def predict_linear_model(model, scaler, X_flat: np.ndarray) -> np.ndarray:
-    return model.predict(scaler.transform(X_flat)).reshape(-1)
+    return model.predict(scaler.transform(X_flat))
 
 
 def train_residual_lstm(
@@ -187,12 +188,14 @@ def train_residual_lstm(
     batch_size: int = BATCH_SIZE,
     epoch_callback=None,
 ):
+    future_days = residuals.shape[1]
+
     feature_scaler = StandardScaler()
     flat = X_seq.reshape(-1, X_seq.shape[-1])
     scaled = feature_scaler.fit_transform(flat).reshape(X_seq.shape)
 
     residual_scaler = StandardScaler()
-    y = residual_scaler.fit_transform(residuals.reshape(-1, 1)).reshape(-1)
+    y = residual_scaler.fit_transform(residuals.reshape(-1, 1)).reshape(-1, future_days)
 
     model = Sequential(
         [
@@ -201,7 +204,7 @@ def train_residual_lstm(
             Dropout(0.12),
             LSTM(24),
             Dense(16, activation="relu"),
-            Dense(1),
+            Dense(future_days),
         ]
     )
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss="huber")
@@ -229,8 +232,20 @@ def train_residual_lstm(
 def predict_residual_lstm(model, feature_scaler, residual_scaler, X_seq: np.ndarray) -> np.ndarray:
     flat = X_seq.reshape(-1, X_seq.shape[-1])
     scaled = feature_scaler.transform(flat).reshape(X_seq.shape)
-    pred_scaled = model.predict(scaled, verbose=0)
-    return residual_scaler.inverse_transform(pred_scaled).reshape(-1)
+    pred_scaled = model.predict(scaled, verbose=0)  # (N, future_days)
+    n, fd = pred_scaled.shape
+    return residual_scaler.inverse_transform(pred_scaled.reshape(-1, 1)).reshape(n, fd)
+
+
+def train_predict_arima(close_prices: np.ndarray, future_days: int = FUTURE_DAYS) -> np.ndarray:
+    import warnings
+    from statsmodels.tsa.arima.model import ARIMA
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        result = ARIMA(close_prices, order=(5, 1, 0)).fit()
+        forecast = result.forecast(steps=future_days)
+    return np.asarray(forecast)
 
 
 def prepare_data(data, lookback: int = LOOKBACK):

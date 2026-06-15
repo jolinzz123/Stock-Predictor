@@ -8,10 +8,26 @@ from data_fetcher import fetch_stock_data, get_stock_info
 from predictor import run_prediction
 from news_analyzer import get_news_sentiment, generate_recommendation
 
-st.set_page_config(page_title="Stock Predictor", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Stock Predictor", page_icon="static/favicon.svg", layout="wide")
 
-st.title("📈 Stock Price Predictor")
-st.markdown("Powered by LSTM · 2-year training window · 7-day forecast")
+st.markdown("""
+<style>
+.block-container { padding-top: 4rem !important; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+    <rect width="64" height="64" rx="12" fill="#0E1117"/>
+    <polyline points="6,48 18,30 28,38 40,18 54,26"
+      fill="none" stroke="#2ECC71" stroke-width="4.5"
+      stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="54" cy="26" r="4" fill="#2ECC71"/>
+  </svg>
+  <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Input ──────────────────────────────────────────────
 col_input, col_btn = st.columns([4, 1])
@@ -56,22 +72,6 @@ m2.metric("Data Points", f"{len(prices)} days")
 m3.metric("2Y High", f"{currency} {prices.max():.2f}")
 m4.metric("2Y Low", f"{currency} {prices.min():.2f}")
 
-# ── Chart 1: Historical closing price ──────────────────
-fig1 = go.Figure()
-fig1.add_trace(go.Scatter(
-    x=dates, y=prices,
-    mode="lines", name="Close",
-    line=dict(color="#4C9BE8", width=1.5),
-    fill="tozeroy", fillcolor="rgba(76,155,232,0.08)",
-))
-fig1.update_layout(
-    title="Historical Closing Price (2 Years)",
-    xaxis_title="Date", yaxis_title=f"Price ({currency})",
-    template="plotly_dark", height=380,
-    margin=dict(l=0, r=0, t=40, b=0),
-)
-st.plotly_chart(fig1, use_container_width=True)
-
 # ── Train model ────────────────────────────────────────
 st.markdown("### Training LSTM Model")
 progress_bar = st.progress(0)
@@ -93,7 +93,74 @@ future_preds = result["future_preds"]
 
 test_dates = dates[test_start:]
 
-# ── Chart 2: Actual vs Predicted ───────────────────────
+# ── News sentiment (fetched early to adjust forecast) ──
+with st.spinner("Fetching news sentiment..."):
+    news_result = get_news_sentiment(ticker)
+    rec = generate_recommendation(current_price, list(future_preds), news_result)
+
+# ── Chart 1: 7-day future forecast ─────────────────────
+last_date = pd.Timestamp(dates[-1])
+future_dates = pd.bdate_range(start=last_date + timedelta(days=1), periods=7)
+
+fig3 = go.Figure()
+fig3.add_trace(go.Scatter(
+    x=dates[-60:], y=prices[-60:],
+    mode="lines", name="Last 60 Days (Actual)",
+    line=dict(color="#4C9BE8", width=1.5),
+))
+fig3.add_trace(go.Scatter(
+    x=[dates[-1], future_dates[0]],
+    y=[prices[-1], future_preds[0]],
+    mode="lines", showlegend=False,
+    line=dict(color="#2ECC71", width=1, dash="dot"),
+))
+fig3.add_trace(go.Scatter(
+    x=future_dates, y=future_preds,
+    mode="lines+markers", name="7-Day Forecast",
+    line=dict(color="#2ECC71", width=2),
+    marker=dict(size=5, symbol="triangle-up"),
+))
+fig3.update_layout(
+    title="7-Day Price Forecast",
+    xaxis_title="Date", yaxis_title=f"Price ({currency})",
+    template="plotly_dark", height=380,
+    margin=dict(l=0, r=0, t=40, b=0),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+)
+st.plotly_chart(fig3, use_container_width=True)
+
+# ── Forecast table ─────────────────────────────────────
+st.subheader("7-Day Forecast Details")
+prev_prices = [prices[-1]] + list(future_preds[:-1])
+forecast_df = pd.DataFrame({
+    "Date": future_dates.strftime("%Y-%m-%d"),
+    f"Predicted Price ({currency})": [f"{p:.2f}" for p in future_preds],
+    "Change": [
+        f"{(future_preds[i] - prev_prices[i]) / prev_prices[i] * 100:+.2f}%"
+        for i in range(7)
+    ],
+})
+st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+
+st.caption("Disclaimer: This prediction is for educational purposes only and does not constitute investment advice.")
+
+# ── Chart 2: Historical closing price ──────────────────
+fig1 = go.Figure()
+fig1.add_trace(go.Scatter(
+    x=dates, y=prices,
+    mode="lines", name="Close",
+    line=dict(color="#4C9BE8", width=1.5),
+    fill="tozeroy", fillcolor="rgba(76,155,232,0.08)",
+))
+fig1.update_layout(
+    title="Historical Closing Price (2 Years)",
+    xaxis_title="Date", yaxis_title=f"Price ({currency})",
+    template="plotly_dark", height=380,
+    margin=dict(l=0, r=0, t=40, b=0),
+)
+st.plotly_chart(fig1, use_container_width=True)
+
+# ── Chart 3: Actual vs Predicted ───────────────────────
 fig2 = go.Figure()
 fig2.add_trace(go.Scatter(
     x=dates, y=prices,
@@ -120,60 +187,49 @@ fig2.update_layout(
 )
 st.plotly_chart(fig2, use_container_width=True)
 
-# ── Chart 3: 7-day future forecast ────────────────────
-last_date = pd.Timestamp(dates[-1])
-future_dates = pd.bdate_range(start=last_date + timedelta(days=1), periods=7)
+# ── Backtest ───────────────────────────────────────────
+st.divider()
+st.subheader("📊 Backtest: 7-Day Prediction Accuracy")
 
-fig3 = go.Figure()
-fig3.add_trace(go.Scatter(
-    x=dates[-60:], y=prices[-60:],
-    mode="lines", name="Last 60 Days (Actual)",
-    line=dict(color="#4C9BE8", width=1.5),
+y_test = np.array(result["y_test"])
+test_preds_7d = np.array(result["test_preds_7d"])
+
+mae_by_day = np.mean(np.abs(test_preds_7d - y_test), axis=0)
+mape_by_day = np.mean(np.abs((test_preds_7d - y_test) / y_test), axis=0) * 100
+actual_dir = np.sign(y_test[:, -1] - y_test[:, 0])
+pred_dir = np.sign(test_preds_7d[:, -1] - test_preds_7d[:, 0])
+dir_acc = np.mean(actual_dir == pred_dir) * 100
+
+b1, b2, b3 = st.columns(3)
+b1.metric("Day-1 MAE", f"{currency} {mae_by_day[0]:.2f}")
+b2.metric("Day-7 MAE", f"{currency} {mae_by_day[6]:.2f}")
+b3.metric("7-Day Direction Accuracy", f"{dir_acc:.1f}%")
+
+fig_bt = go.Figure(go.Bar(
+    x=[f"Day {i+1}" for i in range(7)],
+    y=mae_by_day,
+    marker_color="#FF7F50",
 ))
-# Bridge line connecting last actual to first forecast point
-fig3.add_trace(go.Scatter(
-    x=[dates[-1], future_dates[0]],
-    y=[prices[-1], future_preds[0]],
-    mode="lines", showlegend=False,
-    line=dict(color="#2ECC71", width=1, dash="dot"),
-))
-fig3.add_trace(go.Scatter(
-    x=future_dates, y=future_preds,
-    mode="lines+markers", name="7-Day Forecast",
-    line=dict(color="#2ECC71", width=2, dash="dot"),
-    marker=dict(size=8, symbol="circle"),
-))
-fig3.update_layout(
-    title="7-Day Price Forecast",
-    xaxis_title="Date", yaxis_title=f"Price ({currency})",
-    template="plotly_dark", height=380,
+fig_bt.update_layout(
+    title="Mean Absolute Error by Forecast Day (Test Set)",
+    xaxis_title="Forecast Day", yaxis_title=f"MAE ({currency})",
+    template="plotly_dark", height=300,
     margin=dict(l=0, r=0, t=40, b=0),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
 )
-st.plotly_chart(fig3, use_container_width=True)
+st.plotly_chart(fig_bt, use_container_width=True)
 
-# ── Forecast table ─────────────────────────────────────
-st.subheader("7-Day Forecast Details")
-prev_prices = [prices[-1]] + list(future_preds[:-1])
-forecast_df = pd.DataFrame({
-    "Date": future_dates.strftime("%Y-%m-%d"),
-    f"Predicted Price ({currency})": [f"{p:.2f}" for p in future_preds],
-    "Change": [
-        f"{(future_preds[i] - prev_prices[i]) / prev_prices[i] * 100:+.2f}%"
-        for i in range(7)
-    ],
+backtest_df = pd.DataFrame({
+    "Forecast Day": [f"Day {i+1}" for i in range(7)],
+    f"MAE ({currency})": [f"{v:.2f}" for v in mae_by_day],
+    "MAPE (%)": [f"{v:.2f}%" for v in mape_by_day],
 })
-st.dataframe(forecast_df, use_container_width=True, hide_index=True)
-
-st.caption("Disclaimer: This prediction is for educational purposes only and does not constitute investment advice.")
+st.dataframe(backtest_df, use_container_width=True, hide_index=True)
 
 # ── News-Based Trend Analysis ──────────────────────────
 st.divider()
 st.subheader("📰 News-Based Short-Term Analysis")
 
-with st.spinner("Fetching recent news and analysing sentiment..."):
-    news_result = get_news_sentiment(ticker)
-    rec = generate_recommendation(current_price, list(future_preds), news_result)
+rec = generate_recommendation(current_price, list(future_preds), news_result)
 
 # Recommendation badge
 badge_html = f"""
