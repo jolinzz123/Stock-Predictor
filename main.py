@@ -15,6 +15,12 @@ WATCHLIST = [
     "SPY", "QQQ", "JPM", "BRK-B", "NFLX", "DIS", "ENPH",
 ]
 
+# ── Page routing ────────────────────────────────────────
+if "page" not in st.session_state:
+    st.session_state.page = "watchlist"
+if "selected_ticker" not in st.session_state:
+    st.session_state.selected_ticker = None
+
 
 @st.cache_data(ttl=900)
 def _load_watchlist():
@@ -95,43 +101,45 @@ def _watchlist_html(rows):
     return css + header + body + "</tbody></table>"
 
 
-st.set_page_config(page_title="Stock Predictor", page_icon="static/favicon.svg", layout="wide")
+# ═══════════════════════════════════════════════════════════
+# Watchlist page (original design, unchanged)
+# ═══════════════════════════════════════════════════════════
 
-st.markdown("""
-<style>
-.block-container { padding-top: 4rem !important; }
-</style>
-""", unsafe_allow_html=True)
+def render_watchlist_page():
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+        <rect width="64" height="64" rx="12" fill="#1E2530"/>
+        <polyline points="6,48 18,30 28,38 40,18 54,26"
+          fill="none" stroke="#ffffff" stroke-width="4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
+      </svg>
+      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.markdown("""
-<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
-    <rect width="64" height="64" rx="12" fill="#1E2530"/>
-    <polyline points="6,48 18,30 28,38 40,18 54,26"
-      fill="none" stroke="#ffffff" stroke-width="4"
-      stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
-  </svg>
-  <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
-</div>
-""", unsafe_allow_html=True)
+    # ── Input ──────────────────────────────────────────────
+    _prefill  = st.session_state.pop("prefill", "AAPL")
+    _auto_run = st.session_state.pop("auto_run", False)
 
-# ── Input ──────────────────────────────────────────────
-_prefill  = st.session_state.pop("prefill", "AAPL")
-_auto_run = st.session_state.pop("auto_run", False)
+    col_input, col_btn = st.columns([4, 1])
+    with col_input:
+        ticker = st.text_input(
+            "Ticker",
+            value=_prefill,
+            placeholder="e.g. AAPL, TSLA, 600519.SS, 000858.SZ",
+            label_visibility="collapsed",
+        ).strip().upper()
+    with col_btn:
+        run = st.button("Predict", type="primary", use_container_width=True) or _auto_run
 
-col_input, col_btn = st.columns([4, 1])
-with col_input:
-    ticker = st.text_input(
-        "Ticker",
-        value=_prefill,
-        placeholder="e.g. AAPL, TSLA, 600519.SS, 000858.SZ",
-        label_visibility="collapsed",
-    ).strip().upper()
-with col_btn:
-    run = st.button("Predict", type="primary", use_container_width=True) or _auto_run
+    if run and ticker:
+        st.session_state.selected_ticker = ticker
+        st.session_state.page = "detail"
+        st.rerun()
 
-if not run:
+    # ── Watchlist table ────────────────────────────────────
     with st.spinner("Loading market data..."):
         wl_rows = _load_watchlist()
 
@@ -141,221 +149,333 @@ if not run:
         for i, r in enumerate(wl_rows):
             with btn_cols[i % 10]:
                 if st.button(r["ticker"], key=f"wl_{r['ticker']}", use_container_width=True):
-                    st.session_state["prefill"] = r["ticker"]
-                    st.session_state["auto_run"] = True
+                    st.session_state.selected_ticker = r["ticker"]
+                    st.session_state.page = "detail"
                     st.rerun()
 
         display_rows = [{**r, "svg": _sparkline_svg(r["close_arr"][-60:])} for r in wl_rows]
         st.markdown(_watchlist_html(display_rows), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-    st.stop()
 
-if not ticker:
-    st.error("Please enter a ticker symbol.")
-    st.stop()
 
-# ── Load from cache or train ───────────────────────────
-cached = cache_manager.load(ticker)
+# ═══════════════════════════════════════════════════════════
+# Detail page
+# ═══════════════════════════════════════════════════════════
 
-if cached:
-    df     = cached["df"]
-    info   = cached["info"]
-    result = cached["result"]
-    st.success(f"Loaded from cache — results are ready instantly!")
-else:
-    with st.spinner(f"Fetching 2-year data for {ticker}..."):
-        try:
-            df = fetch_stock_data(ticker)
-            info = get_stock_info(ticker)
-        except ValueError as e:
-            st.error(str(e))
-            st.stop()
+def render_detail_page(ticker: str):
+    # ── Back navigation ───────────────────────────────────
+    if st.button("← Back to Watchlist"):
+        st.session_state.page = "watchlist"
+        st.session_state.selected_ticker = None
+        st.rerun()
 
-    st.markdown("### Training LSTM Model")
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+        <rect width="64" height="64" rx="12" fill="#1E2530"/>
+        <polyline points="6,48 18,30 28,38 40,18 54,26"
+          fill="none" stroke="#ffffff" stroke-width="4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
+      </svg>
+      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-    def on_epoch(epoch, total):
-        progress_bar.progress(epoch / total)
-        status_text.text(f"Epoch {epoch}/{total}")
+    # ── Load from cache or train ──────────────────────────
+    cached = cache_manager.load(ticker)
 
-    result = run_prediction(df, future_days=7, epoch_callback=on_epoch)
+    if cached:
+        df     = cached["df"]
+        info   = cached["info"]
+        result = cached["result"]
+        st.success("Loaded from cache — results are ready instantly!")
+    else:
+        with st.spinner(f"Fetching 2-year data for {ticker}..."):
+            try:
+                df = fetch_stock_data(ticker)
+                info = get_stock_info(ticker)
+            except ValueError as e:
+                st.error(str(e))
+                st.stop()
 
-    progress_bar.progress(1.0)
-    status_text.success("Model training complete!")
-    cache_manager.save(ticker, {"df": df, "info": info, "result": result})
+        st.markdown("### Training LSTM Model")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
-prices = df["Close"].values.astype(float)
-dates = df.index.tz_localize(None) if df.index.tzinfo else df.index
+        def on_epoch(epoch, total):
+            progress_bar.progress(epoch / total)
+            status_text.text(f"Epoch {epoch}/{total}")
 
-currency = info["currency"]
-current_price = info["current_price"]
+        result = run_prediction(df, future_days=7, epoch_callback=on_epoch)
 
-# ── Metric cards ───────────────────────────────────────
-st.subheader(f"{info['name']}  ({ticker})")
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Current Price", f"{currency} {current_price:.2f}" if current_price else "N/A")
-m2.metric("Data Points", f"{len(prices)} days")
-m3.metric("2Y High", f"{currency} {prices.max():.2f}")
-m4.metric("2Y Low", f"{currency} {prices.min():.2f}")
+        progress_bar.progress(1.0)
+        status_text.success("Model training complete!")
+        cache_manager.save(ticker, {"df": df, "info": info, "result": result})
 
-test_preds = result["test_preds"]
-test_preds_7d = np.array(result["test_preds_7d"])
-test_start = result["test_start_idx"]
-train_end = result["train_end_idx"]
-future_preds = result["future_preds"]
+    prices = df["Close"].values.astype(float)
+    dates = df.index.tz_localize(None) if df.index.tzinfo else df.index
 
-# Extend with days 2-7 of the last test window to fill the trailing gap
-test_preds = np.concatenate([test_preds, test_preds_7d[-1, 1:]])
-test_dates = dates[test_start : test_start + len(test_preds)]
+    currency = info["currency"]
+    current_price = info["current_price"]
 
-# ── News sentiment (fetched early to adjust forecast) ──
-with st.spinner("Fetching news sentiment..."):
-    news_result = get_news_sentiment(ticker)
+    # ── Top metric cards ──────────────────────────────────
+    st.subheader(f"{info['name']}  ({ticker})")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Current Price", f"{currency} {current_price:.2f}" if current_price else "N/A")
+    m2.metric("Data Points", f"{len(prices)} days")
+    m3.metric("2Y High", f"{currency} {prices.max():.2f}")
+    m4.metric("2Y Low", f"{currency} {prices.min():.2f}")
+
+    # ── K-line (Candlestick) chart ────────────────────────
+    st.divider()
+    st.subheader("K-Line Chart")
+
+    fig_kline = _build_candlestick(ticker, df, currency)
+    st.plotly_chart(fig_kline, use_container_width=True)
+
+    test_preds = result["test_preds"]
+    test_preds_7d = np.array(result["test_preds_7d"])
+    test_start = result["test_start_idx"]
+    train_end = result["train_end_idx"]
+    future_preds = result["future_preds"]
+
+    # Extend with days 2-7 of the last test window to fill the trailing gap
+    test_preds = np.concatenate([test_preds, test_preds_7d[-1, 1:]])
+    test_dates = dates[test_start : test_start + len(test_preds)]
+
+    # ── News sentiment ────────────────────────────────────
+    with st.spinner("Fetching news sentiment..."):
+        news_result = get_news_sentiment(ticker)
+
+    # ── 7-day forecast chart ──────────────────────────────
+    last_date = pd.Timestamp(dates[-1])
+    future_dates = pd.bdate_range(start=last_date + timedelta(days=1), periods=7)
+
+    fig3 = go.Figure()
+    fig3.add_trace(go.Scatter(
+        x=dates[-60:], y=prices[-60:],
+        mode="lines", name="Last 60 Days (Actual)",
+        line=dict(color="#4C9BE8", width=1.5),
+    ))
+    fig3.add_trace(go.Scatter(
+        x=[dates[-1], future_dates[0]],
+        y=[prices[-1], future_preds[0]],
+        mode="lines", showlegend=False,
+        line=dict(color="#2ECC71", width=1, dash="dot"),
+    ))
+    fig3.add_trace(go.Scatter(
+        x=future_dates, y=future_preds,
+        mode="lines+markers", name="7-Day Forecast",
+        line=dict(color="#2ECC71", width=2),
+        marker=dict(size=5, symbol="triangle-up"),
+    ))
+    fig3.update_layout(
+        title="7-Day Price Forecast",
+        xaxis_title="Date", yaxis_title=f"Price ({currency})",
+        template="plotly_dark", height=380,
+        margin=dict(l=0, r=0, t=40, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+
+    # ── Forecast table ────────────────────────────────────
+    st.subheader("7-Day Forecast Details")
+    prev_prices = [prices[-1]] + list(future_preds[:-1])
+    forecast_df = pd.DataFrame({
+        "Date": future_dates.strftime("%Y-%m-%d"),
+        f"Predicted Price ({currency})": [f"{p:.2f}" for p in future_preds],
+        "Change": [
+            f"{(future_preds[i] - prev_prices[i]) / prev_prices[i] * 100:+.2f}%"
+            for i in range(7)
+        ],
+    })
+    st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+
+    st.caption("Disclaimer: This prediction is for educational purposes only and does not constitute investment advice.")
+
+    # ── Historical closing price ──────────────────────────
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(
+        x=dates, y=prices,
+        mode="lines", name="Close",
+        line=dict(color="#4C9BE8", width=1.5),
+        fill="tozeroy", fillcolor="rgba(76,155,232,0.08)",
+    ))
+    fig1.update_layout(
+        title="Historical Closing Price (2 Years)",
+        xaxis_title="Date", yaxis_title=f"Price ({currency})",
+        template="plotly_dark", height=380,
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # ── Actual vs Predicted ───────────────────────────────
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(
+        x=dates, y=prices,
+        mode="lines", name="Actual",
+        line=dict(color="#4C9BE8", width=1.5),
+    ))
+    fig2.add_trace(go.Scatter(
+        x=test_dates, y=test_preds,
+        mode="lines", name="Predicted (test set)",
+        line=dict(color="#FF7F50", width=1.5),
+    ))
+    fig2.add_vline(
+        x=dates[train_end],
+        line_dash="dot", line_color="gray",
+        annotation_text="Train / Test split",
+        annotation_position="top left",
+    )
+    fig2.update_layout(
+        title="Actual vs Predicted (Historical)",
+        xaxis_title="Date", yaxis_title=f"Price ({currency})",
+        template="plotly_dark", height=400,
+        margin=dict(l=0, r=0, t=40, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # ── News-Based Trend Analysis ─────────────────────────
+    st.divider()
+    st.subheader("📰 News-Based Short-Term Analysis")
+
     rec = generate_recommendation(current_price, list(future_preds), news_result)
 
-# ── Chart 1: 7-day future forecast ─────────────────────
-last_date = pd.Timestamp(dates[-1])
-future_dates = pd.bdate_range(start=last_date + timedelta(days=1), periods=7)
+    # Recommendation badge
+    badge_html = f"""
+    <div style="
+        display:inline-block;
+        background:{rec['color']};
+        color:#111;
+        font-size:1.5rem;
+        font-weight:700;
+        padding:0.35em 1.1em;
+        border-radius:8px;
+        letter-spacing:0.05em;
+        margin-bottom:0.5rem;
+    ">{rec['signal']}</div>
+    """
+    st.markdown(badge_html, unsafe_allow_html=True)
 
-fig3 = go.Figure()
-fig3.add_trace(go.Scatter(
-    x=dates[-60:], y=prices[-60:],
-    mode="lines", name="Last 60 Days (Actual)",
-    line=dict(color="#4C9BE8", width=1.5),
-))
-fig3.add_trace(go.Scatter(
-    x=[dates[-1], future_dates[0]],
-    y=[prices[-1], future_preds[0]],
-    mode="lines", showlegend=False,
-    line=dict(color="#2ECC71", width=1, dash="dot"),
-))
-fig3.add_trace(go.Scatter(
-    x=future_dates, y=future_preds,
-    mode="lines+markers", name="7-Day Forecast",
-    line=dict(color="#2ECC71", width=2),
-    marker=dict(size=5, symbol="triangle-up"),
-))
-fig3.update_layout(
-    title="7-Day Price Forecast",
-    xaxis_title="Date", yaxis_title=f"Price ({currency})",
-    template="plotly_dark", height=380,
-    margin=dict(l=0, r=0, t=40, b=0),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-)
-st.plotly_chart(fig3, use_container_width=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Combined Score", f"{rec['combined_score']:+.2f}", help="Range −1 (bearish) to +1 (bullish)")
+    c2.metric("LSTM 7-Day Forecast", f"{rec['price_change_pct']:+.2f}%")
+    c3.metric("News Sentiment", news_result["sentiment_label"],
+              delta=f"{news_result['aggregate_score']:+.2f}")
 
-# ── Forecast table ─────────────────────────────────────
-st.subheader("7-Day Forecast Details")
-prev_prices = [prices[-1]] + list(future_preds[:-1])
-forecast_df = pd.DataFrame({
-    "Date": future_dates.strftime("%Y-%m-%d"),
-    f"Predicted Price ({currency})": [f"{p:.2f}" for p in future_preds],
-    "Change": [
-        f"{(future_preds[i] - prev_prices[i]) / prev_prices[i] * 100:+.2f}%"
-        for i in range(7)
-    ],
-})
-st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+    st.markdown(rec["rationale"])
 
-st.caption("Disclaimer: This prediction is for educational purposes only and does not constitute investment advice.")
-
-# ── Chart 2: Historical closing price ──────────────────
-fig1 = go.Figure()
-fig1.add_trace(go.Scatter(
-    x=dates, y=prices,
-    mode="lines", name="Close",
-    line=dict(color="#4C9BE8", width=1.5),
-    fill="tozeroy", fillcolor="rgba(76,155,232,0.08)",
-))
-fig1.update_layout(
-    title="Historical Closing Price (2 Years)",
-    xaxis_title="Date", yaxis_title=f"Price ({currency})",
-    template="plotly_dark", height=380,
-    margin=dict(l=0, r=0, t=40, b=0),
-)
-st.plotly_chart(fig1, use_container_width=True)
-
-# ── Chart 3: Actual vs Predicted ───────────────────────
-fig2 = go.Figure()
-fig2.add_trace(go.Scatter(
-    x=dates, y=prices,
-    mode="lines", name="Actual",
-    line=dict(color="#4C9BE8", width=1.5),
-))
-fig2.add_trace(go.Scatter(
-    x=test_dates, y=test_preds,
-    mode="lines", name="Predicted (test set)",
-    line=dict(color="#FF7F50", width=1.5),
-))
-fig2.add_vline(
-    x=dates[train_end],
-    line_dash="dot", line_color="gray",
-    annotation_text="Train / Test split",
-    annotation_position="top left",
-)
-fig2.update_layout(
-    title="Actual vs Predicted (Historical)",
-    xaxis_title="Date", yaxis_title=f"Price ({currency})",
-    template="plotly_dark", height=400,
-    margin=dict(l=0, r=0, t=40, b=0),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-)
-st.plotly_chart(fig2, use_container_width=True)
+    # News articles table
+    articles = news_result["articles"]
+    if articles:
+        st.markdown("#### Recent News")
+        LABEL_ICON = {
+            "Very Positive": "🟢",
+            "Positive":      "🟢",
+            "Neutral":       "⚪",
+            "Negative":      "🔴",
+            "Very Negative": "🔴",
+        }
+        rows = []
+        for a in articles:
+            icon = LABEL_ICON.get(a["sentiment_label"], "⚪")
+            title_link = f"[{a['title']}]({a['url']})" if a["url"] else a["title"]
+            rows.append({
+                "Title": title_link,
+                "Source": a["publisher"],
+                "Published": a["published_at"],
+                "Sentiment": f"{icon} {a['sentiment_label']} ({a['sentiment_score']:+.2f})",
+            })
+        news_df = pd.DataFrame(rows)
+        st.dataframe(news_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No recent news articles found for this ticker.")
 
 
-# ── News-Based Trend Analysis ──────────────────────────
-st.divider()
-st.subheader("📰 News-Based Short-Term Analysis")
+# ═══════════════════════════════════════════════════════════
+# K-line chart builder
+# ═══════════════════════════════════════════════════════════
 
-rec = generate_recommendation(current_price, list(future_preds), news_result)
+def _build_candlestick(ticker: str, df: pd.DataFrame, currency: str) -> go.Figure:
+    """Build a candlestick chart with SMA overlays and range selector."""
+    fig = go.Figure()
 
-# Recommendation badge
-badge_html = f"""
-<div style="
-    display:inline-block;
-    background:{rec['color']};
-    color:#111;
-    font-size:1.5rem;
-    font-weight:700;
-    padding:0.35em 1.1em;
-    border-radius:8px;
-    letter-spacing:0.05em;
-    margin-bottom:0.5rem;
-">{rec['signal']}</div>
-"""
-st.markdown(badge_html, unsafe_allow_html=True)
+    fig.add_trace(go.Candlestick(
+        x=df.index,
+        open=df["Open"],
+        high=df["High"],
+        low=df["Low"],
+        close=df["Close"],
+        name="OHLC",
+        increasing=dict(line=dict(color="#2ECC71", width=1), fillcolor="#2ECC71"),
+        decreasing=dict(line=dict(color="#FF4B4B", width=1), fillcolor="#FF4B4B"),
+        showlegend=True,
+    ))
 
-c1, c2, c3 = st.columns(3)
-c1.metric("Combined Score", f"{rec['combined_score']:+.2f}", help="Range −1 (bearish) to +1 (bullish)")
-c2.metric("LSTM 7-Day Forecast", f"{rec['price_change_pct']:+.2f}%")
-c3.metric("News Sentiment", news_result["sentiment_label"],
-          delta=f"{news_result['aggregate_score']:+.2f}")
+    # SMA 20
+    sma20 = df["Close"].rolling(20).mean()
+    fig.add_trace(go.Scatter(
+        x=df.index, y=sma20,
+        mode="lines", name="SMA 20",
+        line=dict(color="#FFA500", width=1.2),
+    ))
 
-st.markdown(rec["rationale"])
+    # SMA 50
+    sma50 = df["Close"].rolling(50).mean()
+    fig.add_trace(go.Scatter(
+        x=df.index, y=sma50,
+        mode="lines", name="SMA 50",
+        line=dict(color="#DDA0FF", width=1.2),
+    ))
 
-# News articles table
-articles = news_result["articles"]
-if articles:
-    st.markdown("#### Recent News")
-    LABEL_ICON = {
-        "Very Positive": "🟢",
-        "Positive":      "🟢",
-        "Neutral":       "⚪",
-        "Negative":      "🔴",
-        "Very Negative": "🔴",
-    }
-    rows = []
-    for a in articles:
-        icon = LABEL_ICON.get(a["sentiment_label"], "⚪")
-        title_link = f"[{a['title']}]({a['url']})" if a["url"] else a["title"]
-        rows.append({
-            "Title": title_link,
-            "Source": a["publisher"],
-            "Published": a["published_at"],
-            "Sentiment": f"{icon} {a['sentiment_label']} ({a['sentiment_score']:+.2f})",
-        })
-    news_df = pd.DataFrame(rows)
-    st.dataframe(news_df, use_container_width=True, hide_index=True)
+    fig.update_layout(
+        title=f"{ticker} — Candlestick Chart",
+        xaxis_title="Date",
+        yaxis_title=f"Price ({currency})",
+        template="plotly_dark",
+        height=500,
+        margin=dict(l=0, r=0, t=40, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis_rangeslider_visible=True,
+        dragmode="zoom",
+        hovermode="x unified",
+    )
+
+    # Range selector buttons
+    fig.update_xaxes(
+        rangeselector=dict(
+            buttons=list([
+                dict(count=1, label="1M", step="month", stepmode="backward"),
+                dict(count=3, label="3M", step="month", stepmode="backward"),
+                dict(count=6, label="6M", step="month", stepmode="backward"),
+                dict(count=1, label="YTD", step="year", stepmode="todate"),
+                dict(count=1, label="1Y", step="year", stepmode="backward"),
+                dict(step="all", label="All"),
+            ]),
+            bgcolor="#1a1f2e",
+            activecolor="#4C9BE8",
+            font=dict(color="#cccccc"),
+        ),
+    )
+
+    return fig
+
+
+# ═══════════════════════════════════════════════════════════
+# Page config + route dispatch
+# ═══════════════════════════════════════════════════════════
+
+st.set_page_config(page_title="Stock Predictor", page_icon="static/favicon.svg", layout="wide")
+
+st.markdown("""
+<style>
+.block-container { padding-top: 4rem !important; }
+</style>
+""", unsafe_allow_html=True)
+
+if st.session_state.page == "detail" and st.session_state.selected_ticker:
+    render_detail_page(st.session_state.selected_ticker)
 else:
-    st.info("No recent news articles found for this ticker.")
+    render_watchlist_page()
