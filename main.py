@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from ticker_strip import render_ticker_strip
 from datetime import timedelta
 
 from data_fetcher import fetch_stock_data, get_stock_info
@@ -11,6 +12,7 @@ from news_analyzer import (
     generate_recommendation,
     extract_market_drivers,
 )
+from comparator import compare_stocks
 import cache_manager
 
 # ── Watchlist ───────────────────────────────────────────────────────────────
@@ -1110,13 +1112,13 @@ def render_watchlist_page() -> None:
     with col_in:
         ticker_input = (
             st.text_input(
-            "ticker",
-            value=prefill,
-            placeholder="Ticker symbol — AAPL · TSLA · 600519.SS · BRK-B",
-            label_visibility="collapsed",
-        )
-        or ""
-    ).strip().upper()
+                "ticker",
+                value=prefill,
+                placeholder="Ticker symbol — AAPL · TSLA · 600519.SS · BRK-B",
+                label_visibility="collapsed",
+            )
+            or ""
+        ).strip().upper()
     with col_btn:
         run_btn = st.button("Analyse", type="primary",
                             use_container_width=True) or auto_run
@@ -1125,6 +1127,10 @@ def render_watchlist_page() -> None:
         st.session_state.selected_ticker = ticker_input
         st.session_state.page = "detail"
         st.rerun()
+    # ── Recent searches (dropdown, write in recent search without Predict) ──────
+    if st.session_state.recent_searches:
+        recent_line = "  ·  ".join(st.session_state.recent_searches)
+        st.caption(f"Recent: {recent_line}")
 
     if not run_btn:
         st.markdown(f"""
@@ -1162,7 +1168,7 @@ def render_watchlist_page() -> None:
 # ════════════════════════════════════════════════════════════════════════════
 
 def _build_candlestick(_ticker: str, df: pd.DataFrame,
-_currency: str) -> go.Figure:
+                       _currency: str) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
         x=df.index,
@@ -1574,5 +1580,7 @@ def render_detail_page(ticker: str) -> None:
 # ════════════════════════════════════════════════════════════════════════════
 if st.session_state.page == "detail" and st.session_state.selected_ticker:
     render_detail_page(st.session_state.selected_ticker)
+elif st.session_state.page == "compare":
+    render_compare_page()
 else:
     render_watchlist_page()
