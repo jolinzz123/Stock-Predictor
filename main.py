@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -16,8 +16,6 @@ WATCHLIST = [
     "TSM", "AMD", "BABA", "PDD", "JD", "BIDU",
     "SPY", "QQQ", "JPM", "BRK-B", "NFLX", "DIS", "ENPH",
 ]
-st.set_page_config(page_title="Stock Predictor", page_icon="static/favicon.svg", layout="wide")
-
 
 # Page routing
 if "page" not in st.session_state:
@@ -29,9 +27,14 @@ st.markdown("""
 div[data-testid="stHorizontalBlock"]:first-of-type {
     gap: 2rem !important;
 }
-div[data-testid="stHorizontalBlock"]:first-of-type button {
-    background: transparent !important; border: none !important; box-shadow: none !important;
-    color: #000 !important; font-weight: 400 !important; padding: 8px 12px !important; cursor: pointer !important;
+div[data-testid="stHorizontalBlock"]:first-of-type button[kind="secondary"] {
+    background: transparent !important; 
+    border: none !important; 
+    box-shadow: none !important;
+    color: #000 !important; 
+    font-weight: 400 !important; 
+    padding: 8px 12px !important; 
+    cursor: pointer !important;
 }
 div[data-testid="stHorizontalBlock"]:first-of-type button:hover {
     color: #2ECC71 !important;
@@ -41,7 +44,7 @@ div[data-testid="stHorizontalBlock"]:first-of-type button:disabled {
     border-bottom: 2px solid #2ECC71 !important;
     opacity: 1 !important;
 }
-div[data-testid="stHorizontalBlock"]:nth-of-type(2) div[data-testid="stButton"] button {
+button[kind="primary"] {
     background-color: #4CAF50 !important;
     color: #fff !important;
     border: none !important;
@@ -52,17 +55,10 @@ div[data-testid="stHorizontalBlock"]:nth-of-type(2) div[data-testid="stButton"] 
     transition: all 0.2s ease !important;
     box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
 }
-div[data-testid="stHorizontalBlock"]:nth-of-type(2) div[data-testid="stButton"] button:hover {
+button[kind="primary"]:hover {
     text-decoration: underline !important;
     text-underline-offset: 3px !important;
 }
-/* Vertically center the Predict/Compare button with text inputs */
-div[data-testid="stHorizontalBlock"]:nth-of-type(2) div[data-testid="column"]:last-child {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: flex-end !important;
-}
-.block-container { padding-top: 4rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -199,9 +195,9 @@ def render_watchlist_page():
         st.session_state.selected_ticker = ticker
         st.session_state.page = "detail"
         st.rerun()
-    # 鈹€鈹€ Recent searches (dropdown, write in recent search without Predict) 鈹€鈹€鈹€鈹€鈹€鈹€
+    # ── Recent searches (dropdown, write in recent search without Predict) ──────
     if st.session_state.recent_searches:
-        recent_line = "  路  ".join(st.session_state.recent_searches)
+        recent_line = "  ·  ".join(st.session_state.recent_searches)
         st.caption(f"Recent: {recent_line}")
 
         picked = st.radio(
@@ -232,6 +228,7 @@ def render_watchlist_page():
 
         display_rows = [{**r, "svg": _sparkline_svg(r["close_arr"][-60:])} for r in wl_rows]
         st.markdown(_watchlist_html(display_rows), unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
 
 # Detail page
@@ -541,21 +538,39 @@ def _cached_compare(ticker_a, ticker_b):
 
 def render_compare_page():
     render_ticker_strip()
-    # Title (matches Predictor: title above, nav below)
+
     st.markdown("""
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
-        <rect width="64" height="64" rx="12" fill="#1E2530"/>
-        <polyline points="6,48 18,30 28,38 40,18 54,26"
-          fill="none" stroke="#ffffff" stroke-width="4"
-          stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
-      </svg>
-      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Comparer</span>
-    </div>
+    <style>
+    button[kind="primary"], 
+    [data-testid="baseButton-primary"] {
+        background-color: #4CAF50 !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        font-size: 1.1rem !important; 
+        padding: 0.5rem 2rem !important; 
+        border: none !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; 
+        transition: all 0.3s ease !important; 
+    }
+    
+    button[kind="primary"]:hover,
+    [data-testid="baseButton-primary"]:hover {
+        text-decoration: underline !important;
+        text-underline-offset: 4px !important;
+        transform: translateY(-2px) !important; 
+        background-color: #43A047 !important; 
+        color: #ffffff !important;
+        border-color: transparent !important;
+    }
+    
+    button[kind="primary"]:active,
+    [data-testid="baseButton-primary"]:active {
+        transform: translateY(0px) !important; 
+        box-shadow: none !important;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    # Navigation bar (below title, matching Predictor)
     nav1, nav2, _ = st.columns([1, 1, 6])
     with nav1:
         if st.button("Market", use_container_width=True, key="nav_back_cp"):
@@ -564,17 +579,18 @@ def render_compare_page():
             st.rerun()
     with nav2:
         st.button("Compare", disabled=True, use_container_width=True, key="nav_cp")
-    # Selection area -- left-aligned, evenly spaced
     st.markdown("### Select Two Stocks to Compare")
 
-
-
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2 = st.columns(2)
     with col1:
         ticker_a = st.text_input("Stock A", placeholder="e.g. AAPL", key="comp_a").strip().upper()
     with col2:
         ticker_b = st.text_input("Stock B", placeholder="e.g. TSLA", key="comp_b").strip().upper()
-    with col3:
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    _, btn_col, _ = st.columns([1, 2, 1])
+    with btn_col:
         run_compare = st.button("Compare", type="primary", use_container_width=True, key="compare_go")
 
     if run_compare:
@@ -646,7 +662,7 @@ def _display_compare_results(report):
     if win_tag:
         clr = "#2ECC71"
         txt = f"Recommended: {win_tag}"
-        ic = ""
+        ic = chr(8593)
     else:
         clr = "#F39C12"
         txt = "Tie - Suggestions below"
@@ -739,7 +755,15 @@ def _display_compare_results(report):
 
 
 
+# Page config + route dispatch
 
+st.set_page_config(page_title="Stock Predictor", page_icon="static/favicon.svg", layout="wide")
+
+st.markdown("""
+<style>
+.block-container { padding-top: 4rem !important; }
+</style>
+""", unsafe_allow_html=True)
 
 if st.session_state.page == "detail" and st.session_state.selected_ticker:
     render_detail_page(st.session_state.selected_ticker)
