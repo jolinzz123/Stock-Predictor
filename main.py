@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from ticker_strip import render_ticker_strip
 from datetime import timedelta
 
 from data_fetcher import fetch_stock_data, get_stock_info
@@ -106,6 +107,7 @@ def _watchlist_html(rows):
 # ═══════════════════════════════════════════════════════════
 
 def render_watchlist_page():
+    render_ticker_strip()
     st.markdown("""
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
@@ -134,10 +136,34 @@ def render_watchlist_page():
     with col_btn:
         run = st.button("Predict", type="primary", use_container_width=True) or _auto_run
 
+    if "recent_searches" not in st.session_state:
+        st.session_state.recent_searches = []
+
     if run and ticker:
+        if ticker in st.session_state.recent_searches:
+            st.session_state.recent_searches.remove(ticker)
+        st.session_state.recent_searches.insert(0, ticker)
+        st.session_state.recent_searches = st.session_state.recent_searches[:8]
+
         st.session_state.selected_ticker = ticker
         st.session_state.page = "detail"
         st.rerun()
+    # ── Recent searches (dropdown, write in recent search without Predict) ──────
+    if st.session_state.recent_searches:
+        recent_line = "  ·  ".join(st.session_state.recent_searches)
+        st.caption(f"Recent: {recent_line}")
+
+        picked = st.radio(
+            "pick recent",
+            options=st.session_state.recent_searches,
+            horizontal=True,
+            label_visibility="collapsed",
+            index=None,
+        )
+        if picked and picked != st.session_state.get("_last_picked"):
+            st.session_state._last_picked = picked
+            st.session_state.prefill = picked
+            st.rerun()
 
     # ── Watchlist table ────────────────────────────────────
     with st.spinner("Loading market data..."):
@@ -163,12 +189,14 @@ def render_watchlist_page():
 # ═══════════════════════════════════════════════════════════
 
 def render_detail_page(ticker: str):
+    render_ticker_strip()
     # ── Back navigation ───────────────────────────────────
     if st.button("← Back to Watchlist"):
         st.session_state.page = "watchlist"
         st.session_state.selected_ticker = None
         st.rerun()
 
+    
     st.markdown("""
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
