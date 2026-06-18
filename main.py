@@ -1834,7 +1834,7 @@ def _display_compare_results(report):
             html += f'<td style="text-align:center; padding:0.6rem 0.9rem; border-bottom:1px solid {T["border"]}; color:{T["text_primary"]}; font-family:JetBrains Mono,monospace;">{row[ta]}</td>'
             html += f'<td style="text-align:center; padding:0.6rem 0.9rem; border-bottom:1px solid {T["border"]}; color:{T["text_primary"]}; font-family:JetBrains Mono,monospace;">{row[tb]}</td>'
             html += f'<td style="text-align:center; padding:0.6rem 0.9rem; border-bottom:1px solid {T["border"]}; color:{better_color}; font-weight:600; font-size:0.78rem;">{winner}</td>'
-            html += f'<td style="text-align:center; padding:0.6rem 0.9rem; border-bottom:1px solid {T["border"]}; color:{_tsec}; font-family:JetBrains Mono,monospace; font-size:0.78rem;">{row["Pts (Weight)"]}</td>'
+            html += f'<td style="text-align:center; padding:0.6rem 0.9rem; border-bottom:1px solid {T["border"]}; color:{_tsec}; font-family:JetBrains Mono,monospace; font-size:0.78rem;">{row["Weight"]}</td>'
             html += '</tr>'
         html += '</tbody></table>'
         st.markdown(html, unsafe_allow_html=True)
