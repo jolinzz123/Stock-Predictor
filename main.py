@@ -1013,7 +1013,7 @@ def sparkline_svg(prices: np.ndarray, width: int = 120, height: int = 38) -> str
 
 
 # ── Nav bar (shared across pages) ───────────────────────────────────────────
-def render_nav(show_back: bool = False) -> None:
+def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
     # Brand mark: tiny chart polyline inside a rounded tile
     brand_svg = (
         '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"'
@@ -1079,6 +1079,28 @@ def render_nav(show_back: bool = False) -> None:
             st.query_params["theme_manual"] = "1"
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Market / Compare page nav ─────────────────────────────────────────────
+    n1, n2, _ = st.columns([1, 1, 8])
+    with n1:
+        if active_page == "watchlist":
+            st.button("Market", disabled=True, use_container_width=True,
+                      key="nav_market", type="secondary")
+        else:
+            if st.button("Market", use_container_width=True,
+                         key="nav_market", type="secondary"):
+                st.session_state.page = "watchlist"
+                st.session_state.selected_ticker = None
+                st.rerun()
+    with n2:
+        if active_page == "compare":
+            st.button("Compare", disabled=True, use_container_width=True,
+                      key="nav_compare", type="secondary")
+        else:
+            if st.button("Compare", use_container_width=True,
+                         key="nav_compare", type="secondary"):
+                st.session_state.page = "compare"
+                st.rerun()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1154,29 +1176,8 @@ def _watchlist_table_html(rows: list[dict]) -> str:
 
 # Watchlist page
 def render_watchlist_page():
+    render_nav(show_back=False, active_page="watchlist")
     render_ticker_strip()
-    st.markdown("""
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
-        <rect width="64" height="64" rx="12" fill="#1E2530"/>
-        <polyline points="6,48 18,30 28,38 40,18 54,26"
-          fill="none" stroke="#ffffff" stroke-width="4"
-          stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
-      </svg>
-      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Navigation bar
-    nav1, nav2, _ = st.columns([1, 1, 6])
-    with nav1:
-        st.button("Market", disabled=True,
-                  use_container_width=True, key="nav_market")
-    with nav2:
-        if st.button("Compare", use_container_width=True, key="nav_compare"):
-            st.session_state.page = "compare"
-            st.rerun()
 
     # Input
     _prefill = st.session_state.pop("prefill", "AAPL")
@@ -1359,7 +1360,6 @@ def _build_recommendation_text(rec: dict, news_result: dict) -> str:
 
 def render_detail_page(ticker: str) -> None:
     render_nav(show_back=True)
-    render_ticker_strip()
 
     # Back button
     if st.button("← Back to watchlist",
@@ -1368,18 +1368,6 @@ def render_detail_page(ticker: str) -> None:
         st.session_state.selected_ticker = None
         st.rerun()
 
-    st.markdown("""
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
-        <rect width="64" height="64" rx="12" fill="#1E2530"/>
-        <polyline points="6,48 18,30 28,38 40,18 54,26"
-          fill="none" stroke="#ffffff" stroke-width="4"
-          stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
-      </svg>
-      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
-    </div>
-    """, unsafe_allow_html=True)
     # ── Load data / cache ────────────────────────────────────────────────────
     cached = cache_manager.load(ticker)
     if cached:
@@ -1673,63 +1661,11 @@ def _cached_compare(ticker_a, ticker_b):
 
 def render_compare_page():
     render_ticker_strip()
-    st.markdown("""
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
-        <rect width="64" height="64" rx="12" fill="#1E2530"/>
-        <polyline points="6,48 18,30 28,38 40,18 54,26"
-          fill="none" stroke="#ffffff" stroke-width="4"
-          stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
-      </svg>
-      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Comparator</span>
-    </div>
-    """, unsafe_allow_html=True)
+    render_nav(show_back=False, active_page="compare")
 
+    rail_header("Stock comparison", icon("compare", 13, T["text_muted"]))
 
-    st.markdown("""
-    <style>
-    button[kind="primary"], 
-    [data-testid="baseButton-primary"] {
-        background-color: #4CAF50 !important;
-        color: #ffffff !important;
-        border-radius: 8px !important;
-        font-size: 1.1rem !important; 
-        padding: 0.5rem 2rem !important; 
-        border: none !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; 
-        transition: all 0.3s ease !important; 
-    }
-    
-    button[kind="primary"]:hover,
-    [data-testid="baseButton-primary"]:hover {
-        text-decoration: underline !important;
-        text-underline-offset: 4px !important;
-        transform: translateY(-2px) !important; 
-        background-color: #43A047 !important; 
-        color: #ffffff !important;
-        border-color: transparent !important;
-    }
-    
-    button[kind="primary"]:active,
-    [data-testid="baseButton-primary"]:active {
-        transform: translateY(0px) !important; 
-        box-shadow: none !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    nav1, nav2, _ = st.columns([1, 1, 6])
-    with nav1:
-        if st.button("Market", use_container_width=True, key="nav_back_cp"):
-            st.session_state.page = "watchlist"
-            st.session_state.selected_ticker = None
-            st.rerun()
-    with nav2:
-        st.button("Compare", disabled=True,
-                  use_container_width=True, key="nav_cp")
     st.markdown("### Select Two Stocks to Compare")
-
     col_a, col_b, col_btn = st.columns([4, 4, 3])
     with col_a:
         ticker_a = st.text_input(
@@ -1743,9 +1679,6 @@ def render_compare_page():
                                 use_container_width=True, key="compare_go")
 
     if run_compare:
-        if not ticker_a or not ticker_b:
-            st.warning("Please enter both stock tickers.")
-            return
         if ticker_a == ticker_b:
             st.warning("Please enter two different stocks to compare.")
             return
@@ -1783,20 +1716,28 @@ def _build_radar_chart(report):
 
     fig.add_trace(go.Scatterpolar(
         r=ra, theta=axes, fill="toself",
-        name=ta, line=dict(color="#4C9BE8", width=2),
-        fillcolor="rgba(76,155,232,0.25)",
+        name=ta, line=dict(color=T["accent_blue"], width=2),
+        fillcolor=f"rgba({int(T['accent_blue'][1:3],16)},{int(T['accent_blue'][3:5],16)},{int(T['accent_blue'][5:7],16)},0.22)",
     ))
     fig.add_trace(go.Scatterpolar(
         r=rb, theta=axes, fill="toself",
-        name=tb, line=dict(color="#FF7F50", width=2),
-        fillcolor="rgba(255,127,80,0.25)",
+        name=tb, line=dict(color=T["accent_amber"], width=2),
+        fillcolor=f"rgba({int(T['accent_amber'][1:3],16)},{int(T['accent_amber'][3:5],16)},{int(T['accent_amber'][5:7],16)},0.15)",
     ))
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100],
+                            tickfont=dict(family="JetBrains Mono",
+                                          size=9, color=T["text_muted"]),
+                            gridcolor=T["border"]),
+            angularaxis=dict(tickfont=dict(
+                family="Space Grotesk", size=11, color=T["text_secondary"])),
+            bgcolor=T["bg_card"],
+        ),
         template=T["plotly_theme"], height=340,
-        margin=dict(l=50, r=50, t=50, b=80),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=50, r=50, t=50, b=80),
         font=dict(color=T["text_secondary"]),
         legend=dict(orientation="h", yanchor="bottom",
                     y=1.02, xanchor="right", x=1,
@@ -1813,60 +1754,56 @@ def _display_compare_results(report):
     win_tag = wr.get("winner") if isinstance(wr, dict) else wr
     _tsec = T["text_secondary"]
 
-    st.divider()
+    st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # Dashboard layout: left (banner + text + table) | right (scores + radar)
-    col_left, col_right = st.columns([1.1, 1])
-
-    with col_left:
-        # 1. Recommendation banner
+    # ── Winner banner ─────────────────────────────────────────────────────────
+    c1, spacer, c2 = st.columns([4, 0.5, 4])
+    with c1:
         if win_tag:
-            clr = "#2ECC71"
-            txt = f"Recommended: {win_tag}"
-            ic = chr(8593)
+            bg_col = T["badge_buy_bg"]
+            bd_col = T["badge_buy_bd"]
+            txt_col = T["accent_green"]
+            txt = f"\u2191 Recommended: {win_tag}"
         else:
-            clr = "#F39C12"
-            txt = "Tie - Suggestions below"
-            ic = chr(9878)
+            bg_col = T["badge_hold_bg"]
+            bd_col = T["badge_hold_bd"]
+            txt_col = T["accent_amber"]
+            txt = "\u26A0 Tie — see suggestions below"
         st.markdown(
-            f"<div style='background:{clr};color:#111;font-size:1.4rem;font-weight:700;"
-            f"padding:0.5em 1em;border-radius:8px;display:flex;align-items:center;justify-content:center;'>"
-            f"{txt}</div>",
+            f"<div style='background:{bg_col};border:1px solid {bd_col};color:{txt_col};"
+            f"font-family:Space Grotesk,sans-serif;font-size:1.15rem;font-weight:700;"
+            f"padding:0.65rem 1.2rem;border-radius:10px;text-align:center;'>{txt}</div>",
             unsafe_allow_html=True,
         )
+    with c2:
+        ca, cb = st.columns(2)
+        ca.metric(f"{ta} Score", f"{report['score_a']:.0f}/{report['total']}",
+                  help="Combined weighted score (higher = better)")
+        cb.metric(f"{tb} Score", f"{report['score_b']:.0f}/{report['total']}",
+                  help="Combined weighted score (higher = better)")
 
-        # 2. Text description
-        st.markdown(f"**{report['reason']}**")
+    st.markdown(
+        f'<div class="rec-box">{report["reason"]}</div>', unsafe_allow_html=True)
 
-        # 3. Note + comparison table
-        st.markdown(
-            "*Note: the total score is a weighted sum of the sub-scores below.*")
+    # ── Score table + radar ───────────────────────────────────────────────────
+    cl, cr = st.columns([1, 1])
+    with cl:
+        rail_header("Dimension breakdown", icon("layers", 13, T["text_muted"]))
+        st.caption("*Total score is a weighted sum of the sub-scores below.*")
         rows = []
         wmap = {"predicted_return": 3, "volatility": 2,
                 "model_confidence": 2, "sentiment": 2, "price_trend": 1}
         for dk, dd in sc.items():
             w = wmap.get(dk, 1)
-            lab = dd["label"]
-            norm_a = dd.get("norm_a", chr(8212))
-            norm_b = dd.get("norm_b", chr(8212))
-            stars_a = dd.get("stars_a", chr(8212))
-            stars_b = dd.get("stars_b", chr(8212))
             ww = dd.get("winner")
-            if ww == "a":
-                better = ta
-                pts = f"+{w}"
-            elif ww == "b":
-                better = tb
-                pts = f"+{w}"
-            else:
-                better = "Tie"
-                pts = f"+-{w/2}"
+            better = ta if ww == "a" else (tb if ww == "b" else "Tie")
+            pts = f"+{w}" if ww in ("a", "b") else f"+{w/2}"
             rows.append({
-                "Dimension": lab,
-                ta: f"{stars_a}",
-                tb: f"{stars_b}",
+                "Dimension": dd["label"],
+                ta: dd.get("stars_a", "—"),
+                tb: dd.get("stars_b", "—"),
                 "Better": better,
-                "Pts (Weight)": pts,
+                "Weight": pts,
             })
         df = pd.DataFrame(rows)
         # Build custom dark-themed HTML table
@@ -1902,29 +1839,15 @@ def _display_compare_results(report):
         html += '</tbody></table>'
         st.markdown(html, unsafe_allow_html=True)
         st.caption(
-            "Risk (Volatility): historical std dev of daily returns | Model Confidence: based on our LSTM model backtest MSE")
+            "Risk: std-dev of daily returns · Confidence: LSTM backtest MSE")
 
-    with col_right:
-                # 1. Scores side-by-side (background-free, no st.metric card frames)
-        sub1, sub2 = col_right.columns(2)
-        sub1.markdown(
-            f"<div style='text-align:center; padding:0.4em 0;'>"
-            f"<div style='font-size:0.75rem; color:{T["text_secondary"]}; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.15em;'>{ta} Score</div>"
-            f"<div style='font-size:2rem; font-weight:700; color:{T["accent_blue"]};'>{report['score_a']:.0f}<span style='font-size:0.9rem; color:{T["text_secondary"]}; font-weight:400;'>/{report['total']}</span></div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-        sub2.markdown(
-            f"<div style='text-align:center; padding:0.4em 0;'>"
-            f"<div style='font-size:0.75rem; color:{T["text_secondary"]}; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.15em;'>{tb} Score</div>"
-            f"<div style='font-size:2rem; font-weight:700; color:#FF7F50;'>{report['score_b']:.0f}<span style='font-size:0.9rem; color:{T["text_secondary"]}; font-weight:400;'>/{report['total']}</span></div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-        # 2. Radar chart
-        fig = _build_radar_chart(report)
-        st.plotly_chart(fig, use_container_width=True)
-    # Forecast chart (full width) ? historical 30 days + 7-day prediction
+    with cr:
+        rail_header("Radar comparison", icon("activity", 13, T["text_muted"]))
+        st.markdown('<div class="chart-wrap">', unsafe_allow_html=True)
+        st.plotly_chart(_build_radar_chart(report), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── Forecast chart ────────────────────────────────────────────────────────
     da = report["data_a"]
     db = report["data_b"]
     pa = da.get("predicted_price_7d")
@@ -1932,6 +1855,8 @@ def _display_compare_results(report):
     ha = da.get("historical_prices_30d")
     hb = db.get("historical_prices_30d")
     if pa and pb and ha and hb:
+        rail_header("30-day history + 7-day forecast",
+                    icon("chart-line", 13, T["text_muted"]))
         base_a = ha[0]
         base_b = hb[0]
         ha_pct = [(p / base_a - 1) * 100 for p in ha]
@@ -1944,19 +1869,22 @@ def _display_compare_results(report):
         # Stock A (split history + forecast)
         f2.add_trace(go.Scatter(x=hist_days, y=ha_pct,
                                 mode="lines", name=ta,
-                                line=dict(color="#4C9BE8", width=2)))
+                                line=dict(color=T["accent_blue"], width=2)))
         f2.add_trace(go.Scatter(x=[len(ha)] + pred_days, y=[ha_pct[-1]] + pa_pct,
                                 mode="lines", showlegend=False,
-                                line=dict(color="#4C9BE8", width=2, dash="dash")))
+                                line=dict(color=T["accent_blue"], width=2, dash="dash")))
         # Stock B (split history + forecast)
         f2.add_trace(go.Scatter(x=hist_days, y=hb_pct,
                                 mode="lines", name=tb,
-                                line=dict(color="#FF7F50", width=2)))
+                                line=dict(color=T["accent_amber"], width=2)))
         f2.add_trace(go.Scatter(x=[len(hb)] + pred_days, y=[hb_pct[-1]] + pb_pct,
                                 mode="lines", showlegend=False,
-                                line=dict(color="#FF7F50", width=2, dash="dash")))
-        f2.add_vline(x=len(ha), line_dash="dash", line_color="gray",
-                     annotation_text="Today", annotation_position="top left")
+                                line=dict(color=T["accent_amber"], width=2, dash="dash")))
+        f2.add_vline(x=len(ha), line_dash="dot", line_color=T["text_muted"],
+                     annotation_text="Today", annotation_position="top left",
+                     annotation_font=dict(color=T["text_muted"], size=11, family="Space Grotesk"))
+        f2.add_hline(y=0, line_dash="dot",
+                     line_color=T["text_muted"], line_width=1)
         f2.update_layout(
             title=dict(text="30-Day History + 7-Day Forecast", font=dict(color=T["text_primary"])),
             xaxis_title="Day", yaxis_title="Cumulative Return (%)",
@@ -1969,7 +1897,16 @@ def _display_compare_results(report):
                         y=1.02, xanchor="right", x=1,
                         font=dict(color=T["text_primary"])),
         )
+        st.markdown('<div class="chart-wrap">', unsafe_allow_html=True)
         st.plotly_chart(f2, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown(f"""
+<div class="disclaimer">
+  {icon("alert", 13, T["accent_amber"])}
+  For educational and research purposes only — not investment advice.
+</div>
+""", unsafe_allow_html=True)
 
 
 # ROUTER
