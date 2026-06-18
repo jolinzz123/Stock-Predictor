@@ -466,7 +466,8 @@ html, body, [data-testid="stAppViewContainer"],
     border: 1px solid {T["border"]};
     border-radius: 14px;
     overflow: hidden;
-    background: {'linear-gradient(160deg, #0F1D2E 0%, #0A1520 60%, #0D1F30 100%)' if is_dark else T["bg_card"]};
+    background: {
+        'linear-gradient(160deg, #0F1D2E 0%, #0A1520 60%, #0D1F30 100%)' if is_dark else T["bg_card"]};
     position: relative;
     box-shadow: {'0 0 0 1px rgba(76,155,232,0.08), 0 8px 32px rgba(0,0,0,0.4)' if is_dark else T["shadow"]};
     margin-bottom: 1.25rem;
@@ -510,7 +511,8 @@ html, body, [data-testid="stAppViewContainer"],
     transition: background 0.15s;
 }}
 .forecast-table tbody tr:nth-child(odd) {{
-    background: {'rgba(76,155,232,0.03)' if is_dark else 'rgba(26,114,204,0.025)'};
+    background: {
+        'rgba(76,155,232,0.03)' if is_dark else 'rgba(26,114,204,0.025)'};
 }}
 .forecast-table tbody tr:nth-child(even) {{
     background: {'rgba(46,204,113,0.025)' if is_dark else 'transparent'};
@@ -1101,30 +1103,58 @@ def _watchlist_table_html(rows: list[dict]) -> str:
     return header + body + "</tbody></table></div>"
 
 
-def render_watchlist_page() -> None:
-    render_nav(show_back=False)
+# Watchlist page
+def render_watchlist_page():
+    render_ticker_strip()
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+        <rect width="64" height="64" rx="12" fill="#1E2530"/>
+        <polyline points="6,48 18,30 28,38 40,18 54,26"
+          fill="none" stroke="#ffffff" stroke-width="4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
+      </svg>
+      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ── Search row
-    prefill = st.session_state.pop("prefill", "AAPL")
-    auto_run = st.session_state.pop("auto_run", False)
+    # Navigation bar
+    nav1, nav2, _ = st.columns([1, 1, 6])
+    with nav1:
+        st.button("Market", disabled=True,
+                  use_container_width=True, key="nav_market")
+    with nav2:
+        if st.button("Compare", use_container_width=True, key="nav_compare"):
+            st.session_state.page = "compare"
+            st.rerun()
 
-    col_in, col_btn = st.columns([5, 1])
-    with col_in:
-        ticker_input = (
-            st.text_input(
-                "ticker",
-                value=prefill,
-                placeholder="Ticker symbol — AAPL · TSLA · 600519.SS · BRK-B",
-                label_visibility="collapsed",
-            )
-            or ""
+    # Input
+    _prefill = st.session_state.pop("prefill", "AAPL")
+    _auto_run = st.session_state.pop("auto_run", False)
+
+    col_input, col_btn = st.columns([4, 1])
+    with col_input:
+        ticker = st.text_input(
+            "Ticker",
+            value=_prefill,
+            placeholder="e.g. AAPL, TSLA, 600519.SS, 000858.SZ",
+            label_visibility="collapsed",
         ).strip().upper()
     with col_btn:
         run_btn = st.button("Analyse", type="primary",
                             use_container_width=True) or auto_run
 
-    if run_btn and ticker_input:
-        st.session_state.selected_ticker = ticker_input
+    if "recent_searches" not in st.session_state:
+        st.session_state.recent_searches = []
+
+    if run_btn and ticker:
+        if ticker in st.session_state.recent_searches:
+            st.session_state.recent_searches.remove(ticker)
+        st.session_state.recent_searches.insert(0, ticker)
+        st.session_state.recent_searches = st.session_state.recent_searches[:8]
+
+        st.session_state.selected_ticker = ticker
         st.session_state.page = "detail"
         st.rerun()
     # ── Recent searches (dropdown, write in recent search without Predict) ──────
@@ -1141,10 +1171,20 @@ def render_watchlist_page() -> None:
   the watchlist below to open its detail view.
 </div>
 """, unsafe_allow_html=True)
+        picked = st.radio(
+            "pick recent",
+            options=st.session_state.recent_searches,
+            horizontal=True,
+            label_visibility="collapsed",
+            index=None,
+        )
+    if picked and picked != st.session_state.get("_last_picked"):
+        st.session_state._last_picked = picked
+        st.session_state.prefill = picked
+        st.rerun()
 
     # ── Watchlist table
     rail_header("Market watchlist", icon("chart-line", 13, T["text_muted"]))
-
     with st.spinner("Loading market data…"):
         wl_rows = _load_watchlist()
 
@@ -1270,6 +1310,7 @@ def _build_recommendation_text(rec: dict, news_result: dict) -> str:
 
 def render_detail_page(ticker: str) -> None:
     render_nav(show_back=True)
+    render_ticker_strip()
 
     # Back button
     if st.button("← Back to watchlist",
@@ -1278,6 +1319,18 @@ def render_detail_page(ticker: str) -> None:
         st.session_state.selected_ticker = None
         st.rerun()
 
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+        <rect width="64" height="64" rx="12" fill="#1E2530"/>
+        <polyline points="6,48 18,30 28,38 40,18 54,26"
+          fill="none" stroke="#ffffff" stroke-width="4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
+      </svg>
+      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Predictor</span>
+    </div>
+    """, unsafe_allow_html=True)
     # ── Load data / cache ────────────────────────────────────────────────────
     cached = cache_manager.load(ticker)
     if cached:
@@ -1502,9 +1555,7 @@ def render_detail_page(ticker: str) -> None:
 </div>
 """, unsafe_allow_html=True)
 
-    # ════════════════════════════════════════════════════════════════════════
-    #  NEWS & SENTIMENT
-    # ════════════════════════════════════════════════════════════════════════
+    # ── News & sentiment ──────────────────────────────────────────────────────
     st.markdown("<hr/>", unsafe_allow_html=True)
     rail_header("News & sentiment analysis", icon(
         "newspaper", 13, T["text_muted"]))
@@ -1514,29 +1565,22 @@ def render_detail_page(ticker: str) -> None:
         rec = generate_recommendation(
             current_price, list(future_preds), news_result)
 
-    # Signal badge
     st.markdown(signal_badge_html(rec["signal"]), unsafe_allow_html=True)
 
-    # Recommendation metrics
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Combined score",    f"{rec['combined_score']:+.2f}")
     c2.metric("Forecast return",   f"{rec['price_change_pct']:+.2f}%")
     c3.metric("News sentiment",    news_result["sentiment_label"])
-    total_arts = news_result["positive_count"] + \
-        news_result["neutral_count"] + news_result["negative_count"]
+    total_arts = (news_result["positive_count"]
+                  + news_result["neutral_count"]
+                  + news_result["negative_count"])
     c4.metric("Articles analysed", str(total_arts))
 
-    # Narrative explanation — sentences, not bullet points
     narrative = _build_recommendation_text(rec, news_result)
     st.markdown(
         f'<div class="rec-box">{narrative}</div>', unsafe_allow_html=True)
 
-    # Sentiment distribution bar
-    total = (
-        news_result["positive_count"]
-        + news_result["neutral_count"]
-        + news_result["negative_count"]
-    ) or 1
+    total = total_arts or 1
     pos_pct = news_result["positive_count"] / total * 100
     neu_pct = news_result["neutral_count"] / total * 100
     neg_pct = news_result["negative_count"] / total * 100
@@ -1556,16 +1600,11 @@ def render_detail_page(ticker: str) -> None:
 """, unsafe_allow_html=True)
 
     st.markdown("<hr/>", unsafe_allow_html=True)
-
-    # ── Top market drivers ────────────────────────────────────────────────────
     rail_header("Top market drivers", icon("search", 13, T["text_muted"]))
-    drivers = extract_market_drivers(news_result)
-    for article in drivers:
+    for article in extract_market_drivers(news_result):
         st.markdown(news_card_html(article), unsafe_allow_html=True)
 
     st.markdown("<hr/>", unsafe_allow_html=True)
-
-    # Footer
     st.markdown(
         f"<div style='text-align:center;font-size:0.72rem;color:{T['text_muted']};"
         f"padding-bottom:2rem;font-family:Space Grotesk,sans-serif;'>"
@@ -1575,9 +1614,213 @@ def render_detail_page(ticker: str) -> None:
     )
 
 
-# ════════════════════════════════════════════════════════════════════════════
-#  ROUTER
-# ════════════════════════════════════════════════════════════════════════════
+# Compare page
+
+
+def _cached_compare(ticker_a, ticker_b):
+    """Cache comparison results for 1 hour."""
+    return compare_stocks(ticker_a, ticker_b)
+
+
+def render_compare_page():
+    # Back / nav
+    col1, col2, _ = st.columns([1, 1, 6])
+    with col1:
+        if st.button("Market", use_container_width=True, key="nav_back_cp"):
+            st.session_state.page = "watchlist"
+            st.session_state.selected_ticker = None
+            st.rerun()
+    with col2:
+        st.button("Compare", disabled=True,
+                  use_container_width=True, key="nav_cp")
+
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44">
+        <rect width="64" height="64" rx="12" fill="#1E2530"/>
+        <polyline points="6,48 18,30 28,38 40,18 54,26"
+          fill="none" stroke="#ffffff" stroke-width="4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="54" cy="26" r="5" fill="#2ECC71"/>
+      </svg>
+      <span style="font-size:2.4rem; font-weight:700; color:var(--text-color); letter-spacing:-0.5px;">Stock Comparer</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### Select Two Stocks to Compare")
+
+    ticker_list = WATCHLIST[:]
+
+    col_a, col_b, col_go = st.columns([4, 4, 3])
+    with col_a:
+        ticker_a = st.selectbox("Stock A", ticker_list, index=0, key="comp_a")
+    with col_b:
+        ticker_b = st.selectbox("Stock B", ticker_list, index=1, key="comp_b")
+    with col_go:
+        st.write("")
+        st.write("")
+        run_compare = st.button(
+            "\u2192 Compare", type="primary", use_container_width=True, key="compare_go")
+
+    if run_compare:
+        if ticker_a == ticker_b:
+            st.warning("Please select two different stocks to compare.")
+            return
+
+        with st.spinner("Fetching data and running predictions for both stocks (this may take a minute)..."):
+            report = _cached_compare(ticker_a, ticker_b)
+
+        if report is None:
+            st.error(
+                "Could not complete comparison. Check the ticker symbols and try again.")
+            return
+
+        _display_compare_results(report)
+
+
+def _build_radar_chart(report):
+    fig = go.Figure()
+    ta = report["ticker_a"]
+    tb = report["ticker_b"]
+    sc = report["scores"]
+
+    axes = ["Predicted Return", "Risk", "Confidence", "Sentiment"]
+    kv = {"predicted_return": 0, "volatility": 1,
+          "model_confidence": 2, "sentiment": 3}
+    ra, rb = [], []
+    for dk, idx in kv.items():
+        dd = sc.get(dk, {})
+        na = dd.get("norm_a", 50) or 50
+        nb = dd.get("norm_b", 50) or 50
+        ra.append(na)
+        rb.append(nb)
+    ra.append(ra[0])
+    rb.append(rb[0])
+    axes.append(axes[0])
+
+    fig.add_trace(go.Scatterpolar(
+        r=ra, theta=axes, fill="toself",
+        name=ta, line=dict(color="#4C9BE8", width=2),
+        fillcolor="rgba(76,155,232,0.25)",
+    ))
+    fig.add_trace(go.Scatterpolar(
+        r=rb, theta=axes, fill="toself",
+        name=tb, line=dict(color="#FF7F50", width=2),
+        fillcolor="rgba(255,127,80,0.25)",
+    ))
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        template="plotly_dark", height=340,
+        margin=dict(l=50, r=50, t=50, b=80),
+        legend=dict(orientation="h", yanchor="bottom",
+                    y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+def _display_compare_results(report):
+    ta = report["ticker_a"]
+    tb = report["ticker_b"]
+    sc = report["scores"]
+    wr = report.get("winner")
+    win_tag = wr.get("winner") if isinstance(wr, dict) else wr
+
+    st.divider()
+
+    # Compact recommendation banner row
+    c1, spacer, c2 = st.columns([4, 0.5, 4])
+    with c1:
+        if win_tag:
+            clr = "#2ECC71"
+            txt = f"Recommended: {win_tag}"
+            ic = chr(8593)
+        else:
+            clr = "#F39C12"
+            txt = "Tie - Suggestions below"
+            ic = chr(9878)
+        st.markdown(
+            f"<div style='background:{clr};color:#111;font-size:1.4rem;font-weight:700;"
+            f"padding:0.3em 1em;border-radius:8px;text-align:center;'>"
+            f"{ic} {txt}</div>",
+            unsafe_allow_html=True,
+        )
+    with c2:
+        ca, cb = st.columns(2)
+        ca.metric(f"{ta} Score", f"{report['score_a']:.0f}/{report['total']}",
+                  help="Combined weighted score across all dimensions (higher = better)")
+        cb.metric(f"{tb} Score", f"{report['score_b']:.0f}/{report['total']}",
+                  help="Combined weighted score across all dimensions (higher = better)")
+
+    st.markdown(f"**{report['reason']}**")
+
+    # Side by side: table + radar
+    cl, cr = st.columns([1, 1])
+
+    with cl:
+        st.markdown(
+            "*Note: the total score is a weighted sum of the sub-scores below.*")
+        rows = []
+        wmap = {"predicted_return": 3, "volatility": 2,
+                "model_confidence": 2, "sentiment": 2, "price_trend": 1}
+        for dk, dd in sc.items():
+            w = wmap.get(dk, 1)
+            lab = dd["label"]
+            norm_a = dd.get("norm_a", chr(8212))
+            norm_b = dd.get("norm_b", chr(8212))
+            stars_a = dd.get("stars_a", chr(8212))
+            stars_b = dd.get("stars_b", chr(8212))
+            ww = dd.get("winner")
+            if ww == "a":
+                better = ta
+                pts = f"+{w}"
+            elif ww == "b":
+                better = tb
+                pts = f"+{w}"
+            else:
+                better = "Tie"
+                pts = f"+-{w/2}"
+            rows.append({
+                "Dimension": lab,
+                ta: f"{stars_a}",
+                tb: f"{stars_b}",
+                "Better": better,
+                "Pts (Weight)": pts,
+            })
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Risk (Volatility): historical std dev of daily returns | Model Confidence: based on our LSTM model backtest MSE")
+
+    with cr:
+        fig = _build_radar_chart(report)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Prediction chart (full width)
+    da = report["data_a"]
+    db = report["data_b"]
+    pa = da.get("predicted_price_7d")
+    pb = db.get("predicted_price_7d")
+    if pa and pb:
+        days = list(range(1, 8))
+        pa_pct = [(p / pa[0] - 1) * 100 for p in pa]
+        pb_pct = [(p / pb[0] - 1) * 100 for p in pb]
+        f2 = go.Figure()
+        f2.add_trace(go.Scatter(x=days, y=pa_pct, mode="lines+markers", name=ta,
+                                line=dict(color="#4C9BE8", width=2), marker=dict(size=6)))
+        f2.add_trace(go.Scatter(x=days, y=pb_pct, mode="lines+markers", name=tb,
+                                line=dict(color="#FF7F50", width=2), marker=dict(size=6)))
+        f2.update_layout(
+            title="7-Day Forecast Comparison",
+            xaxis_title="Day", yaxis_title="Cumulative Return (%)",
+            template="plotly_dark", height=340,
+            margin=dict(l=0, r=0, t=40, b=0),
+            legend=dict(orientation="h", yanchor="bottom",
+                        y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(f2, use_container_width=True)
+
+
+# ROUTER
 if st.session_state.page == "detail" and st.session_state.selected_ticker:
     render_detail_page(st.session_state.selected_ticker)
 elif st.session_state.page == "compare":
