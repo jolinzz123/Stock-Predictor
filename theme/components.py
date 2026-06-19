@@ -166,7 +166,7 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
         unsafe_allow_html=True,
     )
 
-    n1, n2, _ = st.columns([1, 1, 8])
+    n1, n2, _, n_theme = st.columns([1, 1, 7, 1])
     with n1:
         if active_page == "watchlist":
             st.button("Market", disabled=True, use_container_width=True,
@@ -186,3 +186,10 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
                          key="nav_compare", type="secondary"):
                 st.session_state.page = "compare"
                 st.rerun()
+    with n_theme:
+        is_dark = st.session_state.get("theme") == "dark"
+        label = "☀️ Light" if is_dark else "🌙 Dark"
+        if st.button(label, use_container_width=True,
+                     key="nav_theme_toggle", type="secondary"):
+            st.session_state.theme = "light" if is_dark else "dark"
+            st.rerun()

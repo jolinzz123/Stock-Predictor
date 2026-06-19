@@ -11,7 +11,32 @@ def inject_global_css() -> None:
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* ── Page background sync ─ */
+[data-testid="stAppViewContainer"],
+[data-testid="stApp"],
+[data-testid="stMain"],
+section[data-testid="stSidebar"],
+.main .block-container {{
+    background-color: {T["bg_base"]} !important;
+    color: {T["text_primary"]} !important;
+}}
+[data-testid="stHeader"] {{
+    background-color: {T["bg_base"]} !important;
+}}
+[data-testid="stBottomBlockContainer"] {{
+    background-color: {T["bg_base"]} !important;
+}}
+
 /* ── Nav ─ */
+.topnav {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 0 0.9rem;
+    border-bottom: 1px solid {T["border"]};
+    margin-bottom: 2rem;
+    position: relative;
+}}
 .topnav::after {{
     content: '';
     position: absolute;
