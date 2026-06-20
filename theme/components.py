@@ -150,7 +150,7 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
             st.rerun()
 
     # ── Row 1: Logo (left) + theme toggle (right) — real same row ──────────
-    col_logo, col_theme = st.columns([8, 1])
+    col_logo, col_theme = st.columns([36, 1])
     with col_logo:
         st.markdown(
             '<div class="topnav-brand" style="margin-top:0.3rem;">'
@@ -159,7 +159,7 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
         )
     with col_theme:
         is_dark = st.session_state.get("theme") == "dark"
-        label = "🌙 Dark" if is_dark else "☀️ Light"
+        label = "🌙" if is_dark else "☀️"
         if st.button(label, key="nav_theme_toggle", type="secondary"):
             st.session_state.theme = "light" if is_dark else "dark"
             st.rerun()

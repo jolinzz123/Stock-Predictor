@@ -111,4 +111,41 @@ def css_nav(T: dict) -> str:
     color: {T["accent_blue"]};
     background: {T["accent_blue"]}0d;
 }}
+
+/* ── Theme toggle ─ */
+.st-key-nav_theme_toggle {{
+    display: flex;
+    justify-content: flex-end;
+    margin-right: 0;
+}}
+.st-key-nav_theme_toggle button {{
+    width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    min-width: 38px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    border: 1px solid {T["border"]} !important;
+    background: {T["bg_card"]} !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.1rem !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s !important;
+}}
+.st-key-nav_theme_toggle button:hover {{
+    border-color: {T["accent_blue"]} !important;
+    background: {T["accent_blue"]}12 !important;
+    box-shadow: 0 0 0 3px {T["accent_blue"]}20 !important;
+}}
+.st-key-nav_theme_toggle button:focus,
+.st-key-nav_theme_toggle button:active,
+.st-key-nav_theme_toggle button:focus-visible {{
+    border-color: {T["accent_blue"]} !important;
+    box-shadow: 0 0 0 3px {T["accent_blue"]}30 !important;
+    outline: none !important;
+}}
 """
