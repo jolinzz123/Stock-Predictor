@@ -1,6 +1,3 @@
-# Stock Comparison Module
-# Compares two stocks and returns their data for analysis
-
 import math
 import pandas as pd
 import numpy as np
