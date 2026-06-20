@@ -37,17 +37,25 @@ if "page" not in st.session_state:
 if "selected_ticker" not in st.session_state:
     st.session_state.selected_ticker = None
 if "theme" not in st.session_state:
+    # Default to dark; can be overridden via ?theme=light
+    try:
+        qp = st.query_params
+        st.session_state.theme = qp.get("theme", "dark")
+    except Exception:
+        st.session_state.theme = "dark"
+    st.session_state.theme_manual = False
+
+# Table row click → ?ticker= → navigate to detail
+try:
     qp = st.query_params
-    if "browser_theme" in qp:
-        st.session_state.theme = qp["browser_theme"]
-        st.session_state.theme_manual = (qp.get("theme_manual") == "1")
-    else:
-        st.html("""
-<script>
-(function(){const d=window.matchMedia('(prefers-color-scheme:dark)').matches;const u=new URL(window.location);if(!u.searchParams.has('browser_theme')){u.searchParams.set('browser_theme',d?'dark':'light');window.location.replace(u.toString());}})();
-</script>
-        """)
-        st.stop()
+    if "ticker" in qp:
+        st.session_state.selected_ticker = str(qp["ticker"]).strip().upper()
+        st.session_state.page = "detail"
+        # Remove only ticker param, keep everything else
+        st.query_params.clear()
+        st.rerun()
+except Exception:
+    pass
 
 
 # ── Design tokens ───────────────────────────────────────────────────────────
@@ -127,13 +135,6 @@ LIGHT = {
 T = DARK if st.session_state.theme == "dark" else LIGHT
 is_dark = st.session_state.theme == "dark"
 
-# Listen for browser theme changes
-if not st.session_state.get("theme_manual", False):
-    st.html("""
-<script>
-(function(){const m=window.matchMedia(\"(prefers-color-scheme:dark)\");m.addEventListener(\"change\",function(e){const u=new URL(window.location);if(u.searchParams.get(\"theme_manual\")!==\"1\"){const t=e.matches?\"dark\":\"light\";if(u.searchParams.get(\"browser_theme\")!==t){u.searchParams.set(\"browser_theme\",t);window.location.replace(u.toString());}}});})();
-</script>
-    """)
 
 # ── Inline SVG icons ────────────────────────────────────────────────────────
 
@@ -671,7 +672,7 @@ hr {{ border: none !important; border-top: 1px solid {T["border"]} !important; m
 }}
 .wl-table th:first-child {{ text-align: left; }}
 .wl-table td {{
-    padding: 0.75rem 1rem;
+    padding: 0;
     border-bottom: 1px solid {T["border"]};
     text-align: right;
     vertical-align: middle;
@@ -688,6 +689,22 @@ hr {{ border: none !important; border-top: 1px solid {T["border"]} !important; m
 .wl-up {{ color: {T["accent_green"]}; }}
 .wl-dn {{ color: {T["accent_red"]}; }}
 .wl-neutral {{ color: {T["text_muted"]}; }}
+	/* ── Row links (full-cell clickable) ─ */
+	.wl-cell-link {{
+	    display: block;
+	    width: 100%;
+	    height: 100%;
+	    padding: 0.75rem 1rem;
+	    text-decoration: none !important;
+	    color: inherit !important;
+	    font-family: inherit;
+	    font-size: inherit;
+	    font-weight: inherit;
+	}}
+	.wl-cell-link:hover {{
+	    color: inherit !important;
+	    text-decoration: none !important;
+	}}
 
 /* ── Signal badge ─ */
 .signal-wrap {{ display:flex; justify-content:center; margin: 1.25rem 0; }}
@@ -822,7 +839,7 @@ hr {{ border: none !important; border-top: 1px solid {T["border"]} !important; m
     background: {T["bg_card"]};
     border: 1px solid {T["border"]};
     border-radius: 12px;
-    padding: 1.2rem 1.2rem 0.4rem;
+    padding: 1.8rem 1.2rem 0.4rem;
     margin-bottom: 0.5rem;
     box-shadow: {T["shadow"]};
 }}
@@ -908,7 +925,7 @@ def chart_layout(height: int = 380) -> dict:
         height=height,
         paper_bgcolor=T["chart_paper"],
         plot_bgcolor=T["chart_paper"],
-        margin=dict(l=0, r=0, t=12, b=0),
+        margin=dict(l=0, r=0, t=12, b=45),
         xaxis=dict(
             gridcolor=T["chart_grid"],
             linecolor=T["border"],
@@ -922,7 +939,7 @@ def chart_layout(height: int = 380) -> dict:
                           size=10, color=T["text_muted"]),
         ),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+            orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5,
             font=dict(family="Space Grotesk", size=11,
                       color=T["text_secondary"]),
             bgcolor="rgba(0,0,0,0)",
@@ -953,7 +970,7 @@ def news_card_html(article: dict) -> str:
     link = (
         f'<a href="{url}" target="_blank" rel="noopener" '
         f'style="display:inline-flex;align-items:center;gap:3px;font-size:0.73rem;'
-        f'color:{_tblue};text-decoration:none;font-family:Space Grotesk,sans-serif;'
+        f'color:{T["accent_blue"]};text-decoration:none;font-family:Space Grotesk,sans-serif;'
         f'font-weight:500;margin-top:0.4rem;">'
         f'{icon("external-link", 11, T["accent_blue"])} Read article</a>'
         if url else ""
@@ -1156,20 +1173,21 @@ def _watchlist_table_html(rows: list[dict]) -> str:
         cls = "wl-up" if up else "wl-dn"
         sign = "+" if up else ""
         spark = sparkline_svg(r["close_arr"][-60:])
+        detail_url = f"?theme={st.session_state.theme}&ticker={r['ticker']}"
         body += f"""
-<tr>
-  <td>
+<tr class="wl-row">
+<td><a href="{detail_url}" class="wl-cell-link">
     <div class="wl-ticker">{r["ticker"]}</div>
-    <div class="wl-name">{r["name"]}</div>
+    <div class="wl-name">{r["name"]}</div></a>
   </td>
-  <td>{r["price"]:.2f}</td>
-  <td class="{cls}">{sign}{r["chg"]:.2f}</td>
-  <td class="{cls}">{sign}{r["pct"]:.2f}%</td>
-  <td>{r["open"]:.2f}</td>
-  <td>{r["high"]:.2f}</td>
-  <td>{r["low"]:.2f}</td>
-  <td>{r["prev"]:.2f}</td>
-  <td style="text-align:center;">{spark}</td>
+  <td><a href="{detail_url}" class="wl-cell-link">{r["price"]:.2f}</a></td>
+  <td class="{cls}"><a href="{detail_url}" class="wl-cell-link">{sign}{r["chg"]:.2f}</a></td>
+  <td class="{cls}"><a href="{detail_url}" class="wl-cell-link">{sign}{r["pct"]:.2f}%</a></td>
+  <td><a href="{detail_url}" class="wl-cell-link">{r["open"]:.2f}</a></td>
+  <td><a href="{detail_url}" class="wl-cell-link">{r["high"]:.2f}</a></td>
+  <td><a href="{detail_url}" class="wl-cell-link">{r["low"]:.2f}</a></td>
+  <td><a href="{detail_url}" class="wl-cell-link">{r["prev"]:.2f}</a></td>
+  <td style="text-align:center;"><a href="{detail_url}" class="wl-cell-link">{spark}</a></td>
 </tr>"""
     return header + body + "</tbody></table></div>"
 
@@ -1276,7 +1294,12 @@ def _build_candlestick(_ticker: str, df: pd.DataFrame,
                              name="SMA 20", line=dict(color=T["accent_amber"], width=1.2)))
     fig.add_trace(go.Scatter(x=df.index, y=sma50, mode="lines",
                              name="SMA 50", line=dict(color="#A78BFA", width=1.2)))
-    layout = chart_layout(height=480)
+    layout = chart_layout(height=520)
+    layout["margin"]["t"] = 50  # legend moved to bottom, less top space needed
+    layout["modebar"] = dict(
+        orientation="v",
+        bgcolor="rgba(0,0,0,0)",
+    )
     layout.update(
         xaxis_rangeslider_visible=True,
         xaxis_rangeselector=dict(
