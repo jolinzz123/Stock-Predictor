@@ -32,7 +32,7 @@ section[data-testid="stSidebar"],
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.1rem 0 0.9rem;
+    padding: 1.5rem 0 0.9rem;
     border-bottom: 1px solid {T["border"]};
     margin-bottom: 2rem;
     position: relative;
@@ -54,7 +54,7 @@ section[data-testid="stSidebar"],
     align-items: center;
     gap: 0.5rem;
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.08rem;
+    font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.025em;
     background: linear-gradient(120deg, {T["accent_blue"]} 0%, {T["accent_green"]} 100%);
@@ -64,7 +64,7 @@ section[data-testid="stSidebar"],
     text-fill-color: transparent;
 }}
 .brand-mark {{
-    width: 28px; height: 28px;
+    width: 40px; height: 40px;
     border-radius: 7px;
     background: linear-gradient(135deg, {T["accent_blue"]}22, {T["accent_green"]}22);
     border: 1px solid {T["accent_blue"]}33;
@@ -781,5 +781,35 @@ hr {{ border: none !important; border-top: 1px solid {T["border"]} !important; m
     color: {T["text_secondary"]};
     font-family: 'Inter', sans-serif;
 }}
+
+/* ── Market / Compare → underline tabs ─ */
+.st-key-nav_market button,
+.st-key-nav_compare button {{
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: {T["text_secondary"]} !important;
+    font-weight: 600 !important;
+    width: 100% !important;
+}}
+.st-key-nav_market button:hover,
+.st-key-nav_compare button:hover {{
+    background: transparent !important;
+    color: {T["accent_blue"]} !important;
+    border-bottom-color: {T["accent_blue"]}55 !important;
+    box-shadow: none !important;
+}}
+.st-key-nav_market button:disabled,
+.st-key-nav_compare button:disabled {{
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 2px solid {T["accent_green"]} !important;
+    color: {T["accent_green"]} !important;
+    opacity: 1 !important;
+    border-radius: 0 !important;
+}}
+
 </style>
 """, unsafe_allow_html=True)

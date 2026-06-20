@@ -134,8 +134,8 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
     T = get_tokens()
 
     brand_svg = (
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"'
-        ' stroke="' + T["accent_blue"] + '" stroke-width="2.4"'
+        '<svg width="32" height="32" viewBox="0 0 24 24" fill="none"'
+        ' stroke="' + T["accent_blue"] + '" stroke-width="2.2"'
         ' stroke-linecap="round" stroke-linejoin="round">'
         '<polyline points="3 17 8 10 13 14 21 5"/>'
         '<circle cx="21" cy="5" r="2.5" fill="' +
@@ -153,20 +153,28 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
             '</span></div>'
         )
 
-    st.markdown(
-        back_html +
-        '<div class="topnav">'
-        '  <div class="topnav-left">'
-        '    <div class="topnav-brand">'
-        '      <div class="brand-mark">' + brand_svg + '</div>'
-        '      Foresight'
-        '    </div>'
-        '  </div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    if back_html:
+        st.markdown(back_html, unsafe_allow_html=True)
 
-    n1, n2, _, n_theme = st.columns([1, 1, 7, 1])
+    # ── Row 1: Logo (left) + theme toggle (right) — real same row ──────────
+    col_logo, col_theme = st.columns([8, 1])
+    with col_logo:
+        st.markdown(
+            '<div class="topnav-brand" style="margin-top:0.3rem;">'
+            '<div class="brand-mark">' + brand_svg + '</div>Foresight</div>',
+            unsafe_allow_html=True,
+        )
+    with col_theme:
+        is_dark = st.session_state.get("theme") == "dark"
+        label = "☀️ Light" if is_dark else "🌙 Dark"
+        if st.button(label, use_container_width=True, key="nav_theme_toggle", type="secondary"):
+            st.session_state.theme = "light" if is_dark else "dark"
+            st.rerun()
+
+    st.markdown('<div style="border-bottom:1px solid ' + T["border"] + '; margin-bottom:2rem;"></div>', unsafe_allow_html=True)
+
+    # ── Row 2: Market / Compare tabs ────────────────────────────────────────
+    n1, n2 = st.columns([1, 1])
     with n1:
         if active_page == "watchlist":
             st.button("Market", disabled=True, use_container_width=True,
@@ -186,10 +194,3 @@ def render_nav(show_back: bool = False, active_page: str = "watchlist") -> None:
                          key="nav_compare", type="secondary"):
                 st.session_state.page = "compare"
                 st.rerun()
-    with n_theme:
-        is_dark = st.session_state.get("theme") == "dark"
-        label = "☀️ Light" if is_dark else "🌙 Dark"
-        if st.button(label, use_container_width=True,
-                     key="nav_theme_toggle", type="secondary"):
-            st.session_state.theme = "light" if is_dark else "dark"
-            st.rerun()

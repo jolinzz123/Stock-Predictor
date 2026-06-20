@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from data_fetcher import fetch_stock_data, get_stock_info
 from predictor import run_prediction
+from ticker_strip import render_ticker_strip
 from news_analyzer import get_news_sentiment, generate_recommendation, extract_market_drivers
 import cache_manager
 from theme import (
@@ -120,6 +121,7 @@ def _build_recommendation_text(rec: dict, news_result: dict) -> str:
 
 def render_detail_page(ticker: str) -> None:
     T = get_tokens()
+    render_ticker_strip()
     render_nav(show_back=True)
 
     if st.button("← Back to watchlist", key="back_btn", type="secondary"):

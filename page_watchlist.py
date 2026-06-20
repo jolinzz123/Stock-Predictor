@@ -78,8 +78,8 @@ def _watchlist_table_html(rows: list[dict]) -> str:
 
 
 def render_watchlist_page():
-    render_nav(show_back=False, active_page="watchlist")
     render_ticker_strip()
+    render_nav(show_back=False, active_page="watchlist")
 
     T = get_tokens()
 

@@ -1,5 +1,6 @@
 import streamlit as st
 from data_fetcher import fetch_stock_data
+from theme import get_tokens
 
 STRIP_TICKERS = [
     "AAPL", "MSFT", "NVDA", "GOOGL", "META", "AMZN", "TSLA",
@@ -27,7 +28,7 @@ def _load_strip_data():
                 "ticker": t,
                 "price": curr,
                 "pct": pct,
-                "close_arr": close[-15:],  # make recent 15 trade date to draw trend chat
+                "close_arr": close[-15:],
             })
         except Exception:
             continue
@@ -35,7 +36,7 @@ def _load_strip_data():
 
 
 def _mini_sparkline(prices, width=46, height=20, color="#2ECC71"):
-    """draw a mini trend chat for marquee"""
+    """draw a mini trend chart for marquee"""
     if len(prices) < 2:
         return ""
     mn, mx = float(prices.min()), float(prices.max())
@@ -52,6 +53,8 @@ def _mini_sparkline(prices, width=46, height=20, color="#2ECC71"):
 
 
 def render_ticker_strip():
+    T = get_tokens()  # 拿到当前主题(dark/light)对应的整套颜色
+
     rows = _load_strip_data()
     if not rows:
         return
@@ -59,24 +62,24 @@ def render_ticker_strip():
     items_html = ""
     for r in rows:
         is_up = r["pct"] >= 0
-        color = "#1AAE5C" if is_up else "#E0334A"
+        color = T["accent_green"] if is_up else T["accent_red"]
         arrow = "▲" if is_up else "▼"
         spark = _mini_sparkline(r["close_arr"], color=color)
         items_html += (
             f"<span style='margin-right:42px; white-space:nowrap; display:inline-flex; align-items:center;'>"
-            f"<b style='color:var(--text-color, #111111); font-weight:700;'>{r['ticker']}</b>"
+            f"<b style='color:{T['text_primary']}; font-weight:700;'>{r['ticker']}</b>"
             f"<span style='color:{color}; margin-left:8px; font-weight:600;'>"
             f"{r['price']:.2f} {arrow} {abs(r['pct']):.2f}%</span>"
             f"{spark}"
             f"</span>"
         )
 
-    full_content = items_html + items_html  # copy one time for Marquee
+    full_content = items_html + items_html
 
     html = f"""
-    <div style="overflow:hidden; white-space:nowrap; background:var(--secondary-background-color, #ffffff);
-                border:1px solid rgba(128,128,128,0.2); padding:10px 0; border-radius:6px;
-                margin-bottom:14px;">
+    <div style="overflow:hidden; white-space:nowrap; background:{T['bg_card']};
+                border:1px solid {T['border']}; padding:10px 0; border-radius:8px;
+                margin-bottom:14px; box-shadow:{T['shadow']};">
         <div style="display:inline-block; animation: ticker-scroll 140s linear infinite;">
             {full_content}
         </div>
