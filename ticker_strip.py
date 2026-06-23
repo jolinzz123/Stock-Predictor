@@ -53,7 +53,7 @@ def _mini_sparkline(prices, width=46, height=20, color="#2ECC71"):
 
 
 def render_ticker_strip():
-    T = get_tokens()  # 拿到当前主题(dark/light)对应的整套颜色
+    T = get_tokens()  # take the color follow to current theme (dark/light)
 
     rows = _load_strip_data()
     if not rows:
