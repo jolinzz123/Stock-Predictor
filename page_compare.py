@@ -6,6 +6,7 @@ from comparator import compare_stocks
 from theme import get_tokens, get_is_dark, icon, rail_header, chart_layout, render_nav
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def _cached_compare(ticker_a, ticker_b):
     return compare_stocks(ticker_a, ticker_b)
 

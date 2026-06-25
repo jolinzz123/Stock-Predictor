@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
@@ -8,7 +8,7 @@ from news_analyzer import get_news_sentiment, get_ticker_sentiment_context
 
 
 def get_comparison_data(ticker_a, ticker_b):
-    """Compare two stocks by fetching their data."""
+    """Compare two stocks by fetching data for both tickers in parallel."""
 
     if not ticker_a or not ticker_b:
         return None
@@ -16,14 +16,18 @@ def get_comparison_data(ticker_a, ticker_b):
     ticker_a = ticker_a.upper()
     ticker_b = ticker_b.upper()
 
-    data_a = get_stock_data(ticker_a)
-    data_b = get_stock_data(ticker_b)
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_a = executor.submit(get_stock_data, ticker_a)
+        future_b = executor.submit(get_stock_data, ticker_b)
+        data_a = future_a.result()
+        data_b = future_b.result()
 
     if data_a is None and data_b is None:
         return None
 
     return {ticker_a: data_a, ticker_b: data_b}
-
 
 def get_stock_data(ticker):
     """Get all comparison data for a single stock."""
