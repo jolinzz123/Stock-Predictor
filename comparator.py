@@ -1,4 +1,3 @@
-import math
 import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_squared_error
@@ -31,6 +30,7 @@ def get_stock_data(ticker):
 
     stock_data = {}
     history = None
+    sentiment_context = None
 
     try:
         history = fetch_stock_data(ticker)
@@ -82,7 +82,7 @@ def get_stock_data(ticker):
     try:
         sentiment = (
             sentiment_context["news_result"]
-            if history is not None and len(history) > 0 and "sentiment_context" in locals()
+            if sentiment_context is not None
             else get_news_sentiment(ticker)
         )
         if sentiment is not None:
@@ -98,6 +98,7 @@ def get_stock_data(ticker):
 
 
 def _norm_pct(value, lo=-10, hi=10):
+    """Min-max normalization (higher-is-better). https://en.wikipedia.org/wiki/Feature_scaling"""
     if value is None:
         return None
     clamped = max(lo, min(hi, value))
@@ -105,6 +106,7 @@ def _norm_pct(value, lo=-10, hi=10):
 
 
 def _norm_inverse(value, lo=0, hi=5):
+    """Min-max normalization (lower-is-better). https://en.wikipedia.org/wiki/Feature_scaling"""
     if value is None:
         return None
     clamped = max(lo, min(hi, value))
@@ -119,37 +121,28 @@ def _to_stars(score100):
 
 
 def _calc_volatility(prices):
-    """Calculate standard deviation of daily returns from a price list."""
+    """Sample standard deviation of daily returns. https://www.investopedia.com/terms/v/volatility.asp"""
     if prices is None or len(prices) < 2:
         return None
-    returns = [(prices[i] - prices[i-1]) / prices[i-1]
-               * 100 for i in range(1, len(prices))]
+    arr = np.asarray(prices, dtype=float)
+    returns = np.diff(arr) / arr[:-1] * 100.0
     if len(returns) < 2:
         return None
-    mr = sum(returns) / len(returns)
-    var = sum((r - mr)**2 for r in returns) / (len(returns) - 1)
-    return math.sqrt(var)
+    return float(np.std(returns, ddof=1))
 
 
 def _calc_price_trend(prices):
-    """Calculate slope of recent prices using simple linear regression."""
+    """OLS slope of recent prices. https://en.wikipedia.org/wiki/Ordinary_least_squares"""
     if prices is None or len(prices) < 2:
         return None
-    n = len(prices)
-    xs = list(range(n))
-    ys = prices
-    sx = sum(xs)
-    sy = sum(ys)
-    sxy = sum(x * y for x, y in zip(xs, ys))
-    sx2 = sum(x * x for x in xs)
-    d = n * sx2 - sx * sx
-    if d == 0:
-        return 0.0
-    return (n * sxy - sx * sy) / d
+    x = np.arange(len(prices), dtype=float)
+    y = np.asarray(prices, dtype=float)
+    slope, _ = np.polyfit(x, y, 1)
+    return float(slope)
 
 
 def compute_scores(data_a, data_b):
-    """Compare two stocks across 5 dimensions and return which one wins each."""
+    """Compare two stocks across 5 dimensions. MSE ref: https://scikit-learn.org/stable/modules/model_evaluation.html#mean-squared-error"""
     scores = {}
 
     # Predicted Return (higher is better)
@@ -255,7 +248,7 @@ def compute_scores(data_a, data_b):
 
 
 def determine_winner(ticker_a, ticker_b, scores):
-    """Weight each dimension and return the stock with the highest total score."""
+    """Weighted sum model (WSM) for multi-criteria ranking. https://en.wikipedia.org/wiki/Weighted_sum_model"""
 
     wmap = {"predicted_return": 3, "volatility": 2,
             "model_confidence": 2, "sentiment": 2, "price_trend": 1}
@@ -356,13 +349,13 @@ def compare_stocks(ticker_a, ticker_b):
         "ticker_a": ta, "ticker_b": tb,
         "data_a": da, "data_b": db,
         "scores": scores,
-        "winner": wr if wr else None,
+        "winner": wr,
+        "score_a": wr["score_a"],
+        "score_b": wr["score_b"],
+        "total": wr["total"],
+        "reason": wr["reason"],
+        "breakdown": wr["breakdown"],
     }
-    result["score_a"] = wr.get("score_a", 0) if wr else 0
-    result["score_b"] = wr.get("score_b", 0) if wr else 0
-    result["total"] = wr.get("total", 1) if wr else 1
-    result["reason"] = wr.get("reason", "") if wr else ""
-    result["breakdown"] = wr.get("breakdown", []) if wr else []
 
     return result
 
