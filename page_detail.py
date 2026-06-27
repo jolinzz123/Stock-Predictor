@@ -1,18 +1,18 @@
+import datetime
+from datetime import timedelta
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import datetime
-from datetime import timedelta
 
 from data_fetcher import fetch_stock_data, get_stock_info
 from predictor import run_prediction
 from ticker_strip import render_ticker_strip
 from news_analyzer import (
     extract_market_drivers,
-    generate_recommendation,
     get_news_sentiment,
     get_ticker_sentiment_context,
 )
+from recommendation import generate_recommendation
 import cache_manager
 from theme import (
     get_tokens, icon, rail_header, chart_layout,
@@ -79,16 +79,18 @@ def _build_recommendation_text(rec: dict, news_result: dict, coverage_note: str 
     pos = news_result["positive_count"]
     neg = news_result["negative_count"]
     neu = news_result["neutral_count"]
-    total = pos + neg + neu or 1
+    total = pos + neg + neu
 
+    # ── 1. Price movement phrase ─────────────────────────────────────────────
     abs_pct = abs(price_pct)
-    if abs_pct < 0.05:
+    if abs_pct < 0.05:                          # essentially flat
         price_phrase = "minimal price movement (<b>~0%</b>)"
     elif price_pct > 0:
         price_phrase = f"a rise of <b>+{abs_pct:.1f}%</b>"
     else:
         price_phrase = f"a decline of <b>−{abs_pct:.1f}%</b>"
 
+    # ── 2. Signal strength descriptor ───────────────────────────────────────
     score_desc = (
         "strongly bullish" if score > 0.5 else
         "moderately bullish" if score > 0.15 else
@@ -97,6 +99,7 @@ def _build_recommendation_text(rec: dict, news_result: dict, coverage_note: str 
         "strongly bearish"
     )
 
+    # ── 3. News flow sentence ────────────────────────────────────────────────
     if total == 0:
         news_sent = "No recent news articles were found for this ticker."
     elif total < 4:
@@ -106,15 +109,15 @@ def _build_recommendation_text(rec: dict, news_result: dict, coverage_note: str 
         )
     elif pos > neg and pos > neu:
         news_sent = (
-            f"News flow leans positive — {pos} of {total} recent articles "
-            f"carry a constructive tone, supporting near-term momentum."
+            f"News flow leans positive — {pos} of {total} articles carry a "
+            f"constructive tone, supporting near-term momentum."
         )
     elif neg > pos and neg > neu:
         news_sent = (
-            f"News flow is cautionary — {neg} of {total} recent articles "
-            f"carry a negative tone, which weighs on the short-term outlook."
+            f"News flow is cautionary — {neg} of {total} articles carry a "
+            f"negative tone, which weighs on the short-term outlook."
         )
-    elif pos > neg:
+    elif pos > neg:                             # pos ≈ neu, no strong lean
         news_sent = (
             f"News flow is mixed but slightly positive ({pos} positive, "
             f"{neu} neutral, {neg} negative) — no strong directional signal."
@@ -126,9 +129,11 @@ def _build_recommendation_text(rec: dict, news_result: dict, coverage_note: str 
         )
     else:
         news_sent = (
-            f"News flow is evenly mixed, with {pos} positive, {neu} neutral and {neg} negative — offering no clear directional edge."
+            f"News flow is evenly mixed — {pos} positive, {neu} neutral, "
+            f"{neg} negative — offering no clear directional edge."
         )
 
+    # ── 4. Signal-specific action hint ──────────────────────────────────────
     if signal == "STRONG BUY":
         action = "both the forecast and sentiment align bullishly — a high-conviction entry signal"
     elif signal == "BUY":
@@ -145,8 +150,8 @@ def _build_recommendation_text(rec: dict, news_result: dict, coverage_note: str 
         f"The model projects {price_phrase} over the next 7 trading days, "
         f"with the combined signal reading as <strong>{score_desc}</strong> "
         f"(score {score:+.2f}). "
-        f"{news_sent} "
-        f"{coverage_str}"
+        f"{news_sent}"
+        f"{coverage_str} "
         f"Signal: <strong>{signal}</strong> — {action}."
     )
 
@@ -205,7 +210,7 @@ def render_detail_page(ticker: str) -> None:
 
     if isinstance(df.index, pd.DatetimeIndex):
         if df.index.tz is not None:
-            dates = df.index.tz_localize(None)
+            dates = df.index.tz_convert(None)
         else:
             dates = df.index
     else:
@@ -352,7 +357,6 @@ def render_detail_page(ticker: str) -> None:
     )
     st.markdown(table_html, unsafe_allow_html=True)
 
-
     # ── Actual vs predicted (60d history + last 7-day backtest window) ────────
     rail_header("Model fit — actual vs predicted",
                 icon("layers", 13, T["text_muted"]))
@@ -456,6 +460,7 @@ def render_detail_page(ticker: str) -> None:
         if conf_pct_f >= 30 else
         f"Only {total_arts} recent article{'s' if total_arts != 1 else ''} found — rely more on the price forecast for this signal."
     )
+
     narrative = _build_recommendation_text(rec, news_result, coverage_note)
     st.markdown(
         f'<div class="rec-box">{narrative}</div>', unsafe_allow_html=True)
