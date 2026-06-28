@@ -15,7 +15,7 @@ _SESSION.headers.update(
 )
 
 
-def _fetch_chart(ticker: str, period: str = "2y") -> dict:
+def fetch_chart(ticker: str, period: str = "2y") -> dict:
     response = _SESSION.get(
         _YAHOO_URL.format(ticker=ticker),
         params={
@@ -40,7 +40,7 @@ def _fetch_chart(ticker: str, period: str = "2y") -> dict:
 
 
 def fetch_stock_data(ticker: str, period: str = "2y") -> pd.DataFrame:
-    chart = _fetch_chart(ticker, period)
+    chart = fetch_chart(ticker, period)
     timestamps = chart.get("timestamp") or []
     quote = (chart.get("indicators", {}).get("quote") or [{}])[0]
     adj_close = ((chart.get("indicators", {}).get("adjclose") or [{}])[0].get("adjclose") or [])
@@ -75,7 +75,7 @@ def fetch_stock_data(ticker: str, period: str = "2y") -> pd.DataFrame:
 
 def get_stock_info(ticker: str) -> dict:
     try:
-        chart = _fetch_chart(ticker, "2y")
+        chart = fetch_chart(ticker, "2y")
         meta = chart.get("meta", {})
         closes = ((chart.get("indicators", {}).get("quote") or [{}])[0].get("close") or [])
         current_price = next((price for price in reversed(closes) if price is not None), None)
