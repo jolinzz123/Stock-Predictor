@@ -114,7 +114,7 @@ Compare page:
 5. File overview
 ----------------
 main.py               App entry point, page routing
-data_fetcher.py       Yahoo Finance API calls, data cleaning
+data_fetcher.py       Stock data fetching (yfinance) and cleaning
 feature_engineer.py   37 technical indicators
 model.py              XGBoost, GRU, Ridge, ARIMA model code
 predictor.py          Training pipeline, prediction logic
@@ -140,7 +140,7 @@ UI:          Streamlit
 Charts:      Plotly
 ML:          XGBoost, Keras/TensorFlow (GRU), statsmodels (ARIMA)
 Stacking:    scikit-learn (RidgeCV)
-Data:        Yahoo Finance API
+Data:        yfinance (Yahoo Finance)
 News:        Alpha Vantage + yfinance fallback
 Sentiment:   VADER
 

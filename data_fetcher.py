@@ -1,43 +1,14 @@
+import time
+
 import pandas as pd
-import requests
+import yfinance as yf
 
-_YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-_SESSION = requests.Session()
-_SESSION.headers.update(
-    {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/126.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json,text/plain,*/*",
-    }
-)
+_MAX_RETRIES = 3
+_RETRY_DELAY = 2
 
 
-def fetch_chart(ticker: str, period: str = "2y") -> dict:
-    ticker = ticker.strip().upper()
-    response = _SESSION.get(
-        _YAHOO_URL.format(ticker=ticker),
-        params={
-            "range": period,
-            "interval": "1d",
-            "includePrePost": "false",
-            "events": "div,splits",
-        },
-        timeout=20,
-    )
-    if response.status_code != 200:
-        raise ValueError(f"No data found for ticker '{ticker}'. Please check the symbol and try again.")
-    payload = response.json()
-    chart = payload.get("chart", {})
-    if chart.get("error"):
-        desc = chart["error"].get("description", "Unknown Yahoo Finance error")
-        raise ValueError(f"Yahoo Finance returned an error for ticker '{ticker}': {desc}")
-    results = chart.get("result") or []
-    if not results:
-        raise ValueError(f"No data found for ticker '{ticker}'. Please check the symbol and try again.")
-    return results[0]
+class TickerNotFoundError(ValueError):
+    pass
 
 
 def clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
@@ -53,50 +24,46 @@ def clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fetch_stock_data(ticker: str, period: str = "2y") -> pd.DataFrame:
-    chart = fetch_chart(ticker, period)
-    timestamps = chart.get("timestamp") or []
-    quote = (chart.get("indicators", {}).get("quote") or [{}])[0]
-    adj_close = ((chart.get("indicators", {}).get("adjclose") or [{}])[0].get("adjclose") or [])
-    closes = quote.get("close") or []
-    if not timestamps or not closes:
-        raise ValueError(f"No data found for ticker '{ticker}'. Please check the symbol and try again.")
-
-    n = min(len(timestamps), len(closes))
-    timestamps = timestamps[:n]
-    closes = closes[:n]
-
-    def _safe_col(lst):
-        lst = lst or []
-        return lst[:n] if len(lst) >= n else lst + [None] * (n - len(lst))
-
-    df = pd.DataFrame(
-        {
-            "Date": pd.to_datetime(timestamps, unit="s"),
-            "Open": _safe_col(quote.get("open")),
-            "High": _safe_col(quote.get("high")),
-            "Low": _safe_col(quote.get("low")),
-            "Close": closes,
-            "Adj Close": _safe_col(adj_close) if adj_close else closes,
-            "Volume": _safe_col(quote.get("volume")),
-        }
-    )
-    if df.dropna(subset=["Close"]).empty:
-        raise ValueError(f"No data found for ticker '{ticker}'. Please check the symbol and try again.")
-
-    df = df.set_index("Date").sort_index()
-    return clean_ohlcv(df)
+    ticker = ticker.strip().upper()
+    last_err = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            df = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=False)
+            if df.empty:
+                raise TickerNotFoundError(f"No data found for ticker '{ticker}'. Please check the symbol.")
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.droplevel("Ticker", axis=1)
+            return clean_ohlcv(df)
+        except TickerNotFoundError:
+            raise
+        except Exception as e:
+            last_err = e
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(_RETRY_DELAY * (attempt + 1))
+    raise ValueError(
+        f"Failed to fetch data for '{ticker}' after {_MAX_RETRIES} attempts."
+    ) from last_err
 
 
 def get_stock_info(ticker: str) -> dict:
+    ticker = ticker.strip().upper()
+    result = {"name": ticker, "currency": "USD", "current_price": None}
+
+    t = yf.Ticker(ticker)
+
     try:
-        chart = fetch_chart(ticker, "2y")
-        meta = chart.get("meta", {})
-        closes = ((chart.get("indicators", {}).get("quote") or [{}])[0].get("close") or [])
-        current_price = next((price for price in reversed(closes) if price is not None), None)
-        return {
-            "name": meta.get("longName") or meta.get("shortName") or ticker,
-            "currency": meta.get("currency", "USD"),
-            "current_price": meta.get("regularMarketPrice") or current_price,
-        }
+        fi = t.fast_info
+        result["currency"] = fi.get("currency", "USD")
+        result["current_price"] = fi.get("lastPrice") or fi.get("regularMarketPrice")
     except Exception:
-        return {"name": ticker, "currency": "USD", "current_price": None}
+        pass
+
+    try:
+        info = t.info or {}
+        name = info.get("longName") or info.get("shortName")
+        if name:
+            result["name"] = name
+    except Exception:
+        pass
+
+    return result
