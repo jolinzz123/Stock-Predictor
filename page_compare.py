@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from ticker_strip import render_ticker_strip
@@ -75,33 +75,49 @@ def _display_compare_results(report):
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # ── Winner banner ─────────────────────────────────────────────────────────
-    c1, spacer, c2 = st.columns([4, 0.5, 4])
-    with c1:
-        if win_tag:
-            bg_col = T["badge_buy_bg"]
-            bd_col = T["badge_buy_bd"]
-            txt_col = T["accent_green"]
-            txt = f"Recommended: {win_tag}"
-        else:
-            bg_col = T["badge_hold_bg"]
-            bd_col = T["badge_hold_bd"]
-            txt_col = T["accent_amber"]
-            txt = "⚠ Tie — see suggestions below"
-        st.markdown(
-            f"<div style='background:{bg_col};border:1px solid {bd_col};color:{txt_col};"
-            f"font-family:Space Grotesk,sans-serif;font-size:1.15rem;font-weight:700;"
-            f"padding:1.2rem 1.2rem;border-radius:10px;text-align:center;"
-            f"display:flex;align-items:center;justify-content:center;height:100%;min-height:4.5rem;'>{txt}</div>",
-            unsafe_allow_html=True,
-        )
-    with c2:
-        ca, cb = st.columns(2)
-        ca.metric(f"{ta} Score", f"{report['score_a']:.0f}/{report['total']}",
-                  help="Combined weighted score (higher = better)")
-        cb.metric(f"{tb} Score", f"{report['score_b']:.0f}/{report['total']}",
-                  help="Combined weighted score (higher = better)")
-
+    # === Winner banner + score boxes ===========================================
+    if win_tag:
+        bg_col = T["badge_buy_bg"]
+        bd_col = T["badge_buy_bd"]
+        txt_col = T["accent_green"]
+        txt = f"Recommended: {win_tag}"
+    else:
+        bg_col = T["badge_hold_bg"]
+        bd_col = T["badge_hold_bd"]
+        txt_col = T["accent_amber"]
+        txt = "⚠ Tie — see suggestions below"
+    st.markdown(
+        f"<div style='display:grid;grid-template-columns:4fr 0.5fr 2fr 2fr;gap:0.5rem;width:100%;margin-bottom:0.75rem;'>"
+        # ── Recommend / Tie box ──
+        f"<div style='background:{bg_col};border:1px solid {bd_col};color:{txt_col};"
+        f"font-family:Space Grotesk,sans-serif;font-size:1.15rem;font-weight:700;"
+        f"box-sizing:border-box;padding:1.2rem 1.2rem;border-radius:10px;"
+        f"display:flex;align-items:center;justify-content:center;'>{txt}</div>"
+        # ── Spacer ──
+        f"<div></div>"
+        # ── Score card A ──
+        f"<div style='box-sizing:border-box;padding:1.2rem 1rem;border-radius:10px;"
+        f"background:{T['bg_card']};border:1px solid {T['border']};"
+        f"display:flex;flex-direction:column;align-items:center;justify-content:center;'"
+        f" title='Combined weighted score (higher = better)'>"
+        f"<div style='font-family:Inter,sans-serif;font-size:0.68rem;color:{_tsec};"
+        f"text-transform:uppercase;letter-spacing:0.05em;'>{ta} Score</div>"
+        f"<div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;"
+        f"color:{T['text_primary']};margin-top:0.25rem;'>{report['score_a']:.0f}/{report['total']}</div>"
+        f"</div>"
+        # ── Score card B ──
+        f"<div style='box-sizing:border-box;padding:1.2rem 1rem;border-radius:10px;"
+        f"background:{T['bg_card']};border:1px solid {T['border']};"
+        f"display:flex;flex-direction:column;align-items:center;justify-content:center;'"
+        f" title='Combined weighted score (higher = better)'>"
+        f"<div style='font-family:Inter,sans-serif;font-size:0.68rem;color:{_tsec};"
+        f"text-transform:uppercase;letter-spacing:0.05em;'>{tb} Score</div>"
+        f"<div style='font-family:JetBrains Mono,monospace;font-size:1.3rem;font-weight:700;"
+        f"color:{T['text_primary']};margin-top:0.25rem;'>{report['score_b']:.0f}/{report['total']}</div>"
+        f"</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
     st.markdown(
         f'<div class="rec-box">{report["reason"]}</div>', unsafe_allow_html=True)
 
